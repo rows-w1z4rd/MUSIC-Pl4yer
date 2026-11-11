@@ -1,10 +1,9 @@
-# Builds a signed APK on every push to main and publishes it as a GitHub Release,
-# so it can be downloaded and installed straight from the phone.
-name: Build APK
+# Builds a signed APK and publishes it as a GitHub Release, so it can be installed straight
+# from the phone. It only runs when started by hand ("Run workflow" on the Actions tab, or
+# `gh workflow run build.yml`): day-to-day testing happens in the Android Studio emulator.
+name: Release APK
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -51,11 +50,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: 0.1.${{ github.run_number }}
         run: |
-          apk="SunaPlay-$VERSION.apk"
+          apk="MU51C-$VERSION.apk"
           cp app/build/outputs/apk/release/app-release.apk "$apk"
           git log -1 --format='%s%n%n%b' > notes.txt
           gh release create "v$VERSION" "$apk" \
-            --title "SunaPlay $VERSION" \
+            --title "MU51C $VERSION" \
             --notes-file notes.txt \
             --target "$GITHUB_SHA" \
             --latest

@@ -408,7 +408,7 @@ private fun PermissionScreen(onAllow: () -> Unit) {
     ) {
         Text("Your music stays on your phone", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "SunaPlay needs permission to read the audio files on this phone. " +
+            "MU51C needs permission to read the audio files on this phone. " +
                 "It has no internet access.",
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

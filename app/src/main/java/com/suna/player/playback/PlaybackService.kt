@@ -58,16 +58,6 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
-        // Let the audio chip decode while the screen is off, so the CPU can sleep.
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setAudioOffloadPreferences(
-                AudioOffloadPreferences.Builder()
-                    .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
-                    .setIsGaplessSupportRequired(true)
-                    .build(),
-            )
-            .build()
-
         player.repeatMode = store.repeatMode
         player.addListener(PlayerEvents())
 
@@ -93,6 +83,9 @@ class PlaybackService : MediaSessionService() {
         scope.launch {
             app.settings.skipSilence.collect { player.skipSilenceEnabled = it }
         }
+        scope.launch {
+            app.settings.audioOffload.collect { setAudioOffload(it) }
+        }
 
         restoreQueue()
     }
@@ -116,6 +109,27 @@ class PlaybackService : MediaSessionService() {
             if (player.mediaItemCount > 0) saveQueue()
             updateWidget()
         }
+    }
+
+    /**
+     * With offload on, the phone's audio chip decodes while the screen is off and the CPU can
+     * sleep. It is a setting because some phones skip or stutter with it.
+     */
+    private fun setAudioOffload(on: Boolean) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setAudioOffloadPreferences(
+                AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(
+                        if (on) {
+                            AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                        } else {
+                            AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                        },
+                    )
+                    .setIsGaplessSupportRequired(true)
+                    .build(),
+            )
+            .build()
     }
 
     private fun saveQueue() {

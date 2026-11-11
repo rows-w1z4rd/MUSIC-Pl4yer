@@ -21,10 +21,10 @@ data class Song(
 )
 
 enum class SongSort(val label: String) {
-    TITLE("title"),
-    DATE_ADDED("date added"),
-    ARTIST("artist"),
-    PLAYS("most played"),
+    TITLE("Title"),
+    DATE_ADDED("Date added"),
+    ARTIST("Artist"),
+    PLAYS("Most played"),
 }
 
 fun List<Song>.sortedFor(sort: SongSort, plays: Map<Long, SongPlays>): List<Song> = when (sort) {

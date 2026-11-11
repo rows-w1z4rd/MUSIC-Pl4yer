@@ -30,13 +30,13 @@ enum class Palette(val label: String) {
 
 /** Pages that can be shown in the library, in the user's chosen order. */
 enum class LibraryTab(val label: String) {
-    SONGS("songs"),
-    ALBUMS("albums"),
-    ARTISTS("artists"),
-    PLAYLISTS("playlists"),
-    FOLDERS("folders"),
-    MOST_PLAYED("most played"),
-    RECENT("recent"),
+    SONGS("Songs"),
+    ALBUMS("Albums"),
+    ARTISTS("Artists"),
+    PLAYLISTS("Playlists"),
+    FOLDERS("Folders"),
+    MOST_PLAYED("Most played"),
+    RECENT("Recently played"),
 }
 
 val DefaultTabs = listOf(LibraryTab.SONGS, LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.PLAYLISTS)
@@ -134,6 +134,17 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[DIM] = value.coerceIn(0f, 0.9f) }
     }
 
+    /**
+     * Hands decoding to the phone's audio chip while the screen is off, which saves battery.
+     * Some phones skip or stutter with it, so it can be turned off.
+     */
+    val audioOffload: Flow<Boolean> =
+        context.dataStore.data.map { it[AUDIO_OFFLOAD] ?: false }.distinctUntilChanged()
+
+    suspend fun setAudioOffload(on: Boolean) {
+        context.dataStore.edit { it[AUDIO_OFFLOAD] = on }
+    }
+
     suspend fun setSkipSilence(on: Boolean) {
         context.dataStore.edit { it[SKIP_SILENCE] = on }
     }
@@ -160,5 +171,6 @@ class SettingsStore(private val context: Context) {
         private val WP_X = floatPreferencesKey("wallpaper_x")
         private val WP_Y = floatPreferencesKey("wallpaper_y")
         private val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
+        private val AUDIO_OFFLOAD = booleanPreferencesKey("audio_offload")
     }
 }

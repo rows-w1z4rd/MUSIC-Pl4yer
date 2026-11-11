@@ -1,5 +1,6 @@
 package com.suna.player.ui.settings
 
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.suna.player.data.Appearance
 import com.suna.player.data.SettingsStore
-import com.suna.player.ui.theme.MonoLabel
+import com.suna.player.ui.theme.SmallLabel
 import com.suna.player.ui.theme.WallpaperImage
 
 /**
@@ -72,16 +73,16 @@ fun WallpaperEditor(
             modifier = Modifier.fillMaxSize().systemBarsPadding().padding(16.dp),
         ) {
             Text(
-                "pinch to zoom · drag to move",
-                style = MonoLabel,
+                "Pinch to zoom, drag to move",
+                style = SmallLabel,
                 color = Color.White,
                 modifier = Modifier
                     .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             )
             Text(
-                "zoom ${"%.2f".format(scale)}×",
-                style = MonoLabel,
+                "${(scale * 100).roundToInt()}%",
+                style = SmallLabel,
                 color = Color.White.copy(alpha = 0.8f),
                 modifier = Modifier.padding(top = 6.dp),
             )

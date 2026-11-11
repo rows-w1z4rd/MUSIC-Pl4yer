@@ -82,7 +82,7 @@ import com.suna.player.ui.common.SimpleRow
 import com.suna.player.ui.common.SongList
 import com.suna.player.ui.common.pressable
 import com.suna.player.ui.common.songCount
-import com.suna.player.ui.theme.MonoLabel
+import com.suna.player.ui.theme.SmallLabel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -176,7 +176,7 @@ fun LibraryScreen(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        placeholder = { Text("search songs, artists, albums", style = MonoLabel) },
+                        placeholder = { Text("Search songs, artists, albums") },
                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
@@ -195,7 +195,7 @@ fun LibraryScreen(
         Panel(Modifier.weight(1f)) {
             when {
                 searching && query.isNotBlank() && results.isEmpty() ->
-                    EmptyMessage("no matches for \"${query.trim()}\"")
+                    EmptyMessage("No results for \"${query.trim()}\"")
                 searching -> SongList(
                     songs = results,
                     onPlay = { onPlay(results, it) },
@@ -244,7 +244,7 @@ private fun TabBar(tabs: List<LibraryTab>, selected: Int, onSelect: (Int) -> Uni
             val shape = RoundedCornerShape(8.dp)
             Text(
                 text = tab.label,
-                style = MonoLabel.copy(
+                style = SmallLabel.copy(
                     fontSize = MaterialTheme.typography.bodyMedium.fontSize,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 ),
@@ -279,7 +279,7 @@ private fun SongsPage(
         songs.sortedFor(sort, plays)
     }
     if (songs.isEmpty()) {
-        EmptyMessage("no music found on this phone yet")
+        EmptyMessage("No music found on this phone")
         return
     }
     SongList(
@@ -290,7 +290,7 @@ private fun SongsPage(
         contentPadding = padding,
         header = {
             ListToolbar(
-                label = "sort: ${sort.label}",
+                label = sort.label,
                 count = songs.size,
                 onLabel = { sort = SongSort.entries[(sort.ordinal + 1) % SongSort.entries.size] },
                 onShuffle = { onShuffle(sorted) },
@@ -328,12 +328,12 @@ fun ListToolbar(
                     tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
-                Text(label, style = MonoLabel, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+                Text(label, style = SmallLabel, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
             }
         }
         Text(
-            "[$count]",
-            style = MonoLabel,
+            "$count",
+            style = SmallLabel,
             color = colors.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.padding(start = 6.dp),
         )
@@ -393,7 +393,7 @@ private fun StatsPage(
         }
     }
     if (list.isEmpty()) {
-        EmptyMessage("nothing played yet")
+        EmptyMessage("Songs you play will show up here")
         return
     }
     val now = remember(plays) { System.currentTimeMillis() }
@@ -405,7 +405,7 @@ private fun StatsPage(
         contentPadding = padding,
         info = { song ->
             val p = plays[song.id] ?: return@SongList null
-            if (mostPlayed) "${p.playCount}×" else timeAgo(now - p.lastPlayedAt)
+            if (mostPlayed) plays(p.playCount) else timeAgo(now - p.lastPlayedAt)
         },
     )
 }
@@ -413,18 +413,21 @@ private fun StatsPage(
 private fun timeAgo(ms: Long): String {
     val minutes = ms / 60_000
     return when {
-        minutes < 1 -> "now"
-        minutes < 60 -> "${minutes}m"
-        minutes < 60 * 24 -> "${minutes / 60}h"
-        else -> "${minutes / (60 * 24)}d"
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "$minutes min ago"
+        minutes < 60 * 24 -> "${minutes / 60} h ago"
+        minutes < 60 * 24 * 2 -> "Yesterday"
+        else -> "${minutes / (60 * 24)} days ago"
     }
 }
+
+private fun plays(n: Int) = if (n == 1) "1 play" else "$n plays"
 
 @Composable
 private fun AlbumGrid(songs: List<Song>, onOpen: (Long) -> Unit, bottomSpace: Dp) {
     val albums: List<Album> = remember(songs) { songs.toAlbums() }
     if (albums.isEmpty()) {
-        EmptyMessage("no albums")
+        EmptyMessage("No albums")
         return
     }
     LazyVerticalGrid(
@@ -450,7 +453,7 @@ private fun AlbumGrid(songs: List<Song>, onOpen: (Long) -> Unit, bottomSpace: Dp
                 )
                 Text(
                     album.artist,
-                    style = MonoLabel,
+                    style = SmallLabel,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

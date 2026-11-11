@@ -1,5 +1,8 @@
 package com.suna.player.ui.settings
 
+import com.suna.player.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,7 +68,7 @@ import com.suna.player.ui.common.LocalMiniPlayerSpace
 import com.suna.player.ui.common.Panel
 import com.suna.player.ui.common.ScreenTopBar
 import com.suna.player.ui.theme.AccentChoices
-import com.suna.player.ui.theme.MonoLabel
+import com.suna.player.ui.theme.SmallLabel
 import com.suna.player.ui.theme.colors
 import kotlinx.coroutines.launch
 
@@ -91,17 +94,17 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = bottom + 16.dp),
         ) {
-            Section("look") {
-                Label("theme")
+            Section("Appearance") {
+                Label("Theme")
                 PalettePicker(appearance.palette) { scope.launch { settings.setPalette(it) } }
                 if (appearance.hasWallpaper && appearance.palette.colors()?.dark == false) {
-                    Hint("light themes switch to OLED while a wallpaper is set, to keep text readable.")
+                    Hint("Light themes switch to black while a wallpaper is set, so text stays readable.")
                 }
 
-                Label("accent")
+                Label("Accent color")
                 AccentPicker(appearance.accent) { scope.launch { settings.setAccent(it) } }
 
-                Label("text at the top")
+                Label("Header text")
                 var header by remember { mutableStateOf(appearance.headerText) }
                 OutlinedTextField(
                     value = header,
@@ -110,44 +113,48 @@ fun SettingsScreen(
                         scope.launch { settings.setHeaderText(header) }
                     },
                     singleLine = true,
-                    placeholder = { Text("empty shows nothing", style = MonoLabel) },
+                    placeholder = { Text("Leave empty for no header") },
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
 
-            Section("library tabs") {
-                Hint("pick the pages you want and their order. swipe left and right between them.")
+            Section("Library tabs") {
+                Hint("Choose which tabs show and in what order. Swipe sideways to switch between them.")
                 TabManager(appearance.tabs) { scope.launch { settings.setTabs(it) } }
             }
 
-            Section("wallpaper") {
+            Section("Wallpaper") {
                 WallpaperControls(appearance, settings, wallpapers, onAdjustWallpaper)
             }
 
-            Section("playback") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Skip silence", style = MaterialTheme.typography.bodyLarge)
-                        Hint("cuts quiet gaps in songs. uses a little more battery.")
-                    }
-                    Switch(
-                        checked = skipSilence,
-                        onCheckedChange = { scope.launch { settings.setSkipSilence(it) } },
-                    )
-                }
+            Section("Playback") {
+                val offload by settings.audioOffload.collectAsStateWithLifecycle(initialValue = false)
+                SwitchRow(
+                    title = "Battery saver playback",
+                    hint = "Lets the phone's audio chip play music while the screen is off. " +
+                        "Turn it off if you hear skips or stutters.",
+                    checked = offload,
+                    onChange = { scope.launch { settings.setAudioOffload(it) } },
+                )
+                SwitchRow(
+                    title = "Skip silence",
+                    hint = "Skips quiet parts at the start and end of songs.",
+                    checked = skipSilence,
+                    onChange = { scope.launch { settings.setSkipSilence(it) } },
+                )
             }
 
-            Section("about") {
+            Section("About") {
                 val context = LocalContext.current
                 val version = remember {
                     runCatching {
                         context.packageManager.getPackageInfo(context.packageName, 0).versionName
                     }.getOrNull() ?: "?"
                 }
-                Text("SunaPlay $version", style = MonoLabel)
-                Hint("offline music player. no internet permission, no tracking.")
-                Hint("themes: Catppuccin, Nord, Gruvbox, Rosé Pine and Tokyo Night are open-source palettes.")
+                Text("${stringResource(R.string.app_name)} $version", style = MaterialTheme.typography.bodyLarge)
+                Hint("Plays the music stored on your phone. No internet access, no tracking.")
+                Hint("Catppuccin, Nord, Gruvbox, Rosé Pine and Tokyo Night are open-source color schemes.")
             }
         }
     }
@@ -158,8 +165,8 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
     Panel {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                "# $title",
-                style = MonoLabel,
+                title,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 4.dp),
             )
@@ -181,10 +188,24 @@ private fun Label(text: String) {
 private fun Hint(text: String) {
     Text(
         text,
-        style = MonoLabel,
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp),
     )
+}
+
+@Composable
+private fun SwitchRow(title: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 8.dp),
+    ) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Hint(hint)
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
 }
 
 /** Small previews of each palette: its background, a panel, text lines and the accent. */
@@ -239,7 +260,7 @@ private fun PalettePicker(selected: Palette, onPick: (Palette) -> Unit) {
                 }
                 Text(
                     palette.label,
-                    style = MonoLabel,
+                    style = SmallLabel,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     modifier = Modifier.padding(top = 6.dp),
@@ -267,7 +288,7 @@ private fun AccentPicker(selected: Int?, onPick: (Int?) -> Unit) {
                     .clickable { onPick(null) }
                     .padding(horizontal = 12.dp),
             ) {
-                Text("theme's own", style = MonoLabel)
+                Text("Default", style = MaterialTheme.typography.labelLarge)
             }
         }
         items(AccentChoices) { color ->
@@ -328,7 +349,7 @@ private fun TabRow(
         Checkbox(checked = checked, onCheckedChange = { onToggle() }, enabled = canToggle)
         Text(
             tab.label,
-            style = MonoLabel.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize),
+            style = MaterialTheme.typography.bodyLarge,
             color = if (checked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
@@ -378,7 +399,7 @@ private fun WallpaperControls(
             }) { Text("Remove") }
         }
     }
-    if (importFailed) Hint("that picture could not be opened. try another one.")
+    if (importFailed) Hint("Couldn't open that picture. Try another one.")
 
     if (appearance.hasWallpaper) {
         // Sliders move freely and save once when released.
@@ -386,14 +407,14 @@ private fun WallpaperControls(
         var dim by remember(appearance.dim) { mutableFloatStateOf(appearance.dim) }
         val sliderColors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest)
 
-        Label("blur")
+        Label("Blur")
         Slider(
             value = blur,
             onValueChange = { blur = it },
             onValueChangeFinished = { scope.launch { settings.setBlur(blur) } },
             colors = sliderColors,
         )
-        Label("darken")
+        Label("Dim")
         Slider(
             value = dim,
             onValueChange = { dim = it },

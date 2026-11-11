@@ -42,7 +42,8 @@ import com.suna.player.data.Palette
 val LocalHasWallpaper = staticCompositionLocalOf { false }
 
 /** Small monospace labels: counts, times, section names. Part of the app's terminal flavor. */
-val MonoLabel = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = 0.sp)
+/** Small secondary text. Digits are all the same width so times and counts don't jitter. */
+val SmallLabel = TextStyle(fontSize = 12.sp, letterSpacing = 0.1.sp, fontFeatureSettings = "tnum")
 
 /** Accent choices offered on top of each palette's own accent. */
 val AccentChoices = listOf(
@@ -272,6 +273,6 @@ private val SunaTypography = Typography().let { t ->
     t.copy(
         headlineSmall = t.headlineSmall.copy(letterSpacing = (-0.3).sp),
         titleLarge = t.titleLarge.copy(letterSpacing = (-0.2).sp),
-        labelSmall = MonoLabel.copy(fontSize = 11.sp),
+        labelSmall = SmallLabel.copy(fontSize = 11.sp),
     )
 }

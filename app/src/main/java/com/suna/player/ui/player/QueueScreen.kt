@@ -32,7 +32,7 @@ import com.suna.player.ui.common.Artwork
 import com.suna.player.ui.common.Panel
 import com.suna.player.ui.common.ScreenTopBar
 import com.suna.player.ui.common.songCount
-import com.suna.player.ui.theme.MonoLabel
+import com.suna.player.ui.theme.SmallLabel
 
 @Composable
 fun QueueScreen(
@@ -66,8 +66,8 @@ fun QueueScreen(
                             .padding(start = 14.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
                     ) {
                         Text(
-                            if (isCurrent) "▶" else "%02d".format(index + 1),
-                            style = MonoLabel,
+                            "${index + 1}",
+                            style = SmallLabel,
                             color = if (isCurrent) colors.primary else colors.onSurfaceVariant,
                             modifier = Modifier.padding(end = 10.dp),
                         )
@@ -81,7 +81,7 @@ fun QueueScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                if (upcomingPlayNext) "${entry.artist} · next" else entry.artist,
+                                if (upcomingPlayNext) "${entry.artist} · Up next" else entry.artist,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = colors.onSurfaceVariant,
                                 maxLines = 1,

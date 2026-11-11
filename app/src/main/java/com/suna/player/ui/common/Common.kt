@@ -50,7 +50,7 @@ import coil3.compose.AsyncImage
 import com.suna.player.data.Song
 import com.suna.player.data.albumArtUri
 import com.suna.player.ui.theme.LocalHasWallpaper
-import com.suna.player.ui.theme.MonoLabel
+import com.suna.player.ui.theme.SmallLabel
 
 /** Height the floating mini player covers at the bottom; lists add it as bottom padding. */
 val LocalMiniPlayerSpace = compositionLocalOf { 0.dp }
@@ -156,7 +156,7 @@ fun ScreenTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) {
-                Text(subtitle, style = MonoLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(subtitle, style = SmallLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         actions()
@@ -170,7 +170,7 @@ fun SongRow(
     onPlayNext: () -> Unit,
     onOptions: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Small monospace note on the right, such as a play count. */
+    /** Small note on the right, such as a play count. */
     info: String? = null,
 ) {
     Row(
@@ -197,7 +197,7 @@ fun SongRow(
             )
         }
         if (info != null) {
-            Text(info, style = MonoLabel, color = MaterialTheme.colorScheme.primary)
+            Text(info, style = SmallLabel, color = MaterialTheme.colorScheme.primary)
         }
         IconButton(onClick = onPlayNext) {
             Icon(
@@ -279,7 +279,7 @@ fun SimpleRow(
             if (subtitle != null) {
                 Text(
                     subtitle,
-                    style = MonoLabel,
+                    style = SmallLabel,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -290,7 +290,7 @@ fun SimpleRow(
 @Composable
 fun EmptyMessage(text: String) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = MonoLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = SmallLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

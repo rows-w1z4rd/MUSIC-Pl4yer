@@ -7,15 +7,12 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Handler
-import android.os.Looper
 import android.util.Size
 import android.widget.RemoteViews
-import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.PlaybackPendingIntentBuilder
 import com.suna.player.MainActivity
 import com.suna.player.R
 import com.suna.player.data.albumArtUri
@@ -41,98 +38,43 @@ class PlayerWidget : AppWidgetProvider() {
         val pending = goAsync()
         Thread {
             try {
-                val saved = QueueStore(context).load()
-                val item = saved?.items?.getOrNull(saved.index)
-                WidgetRenderer.render(context, item?.toWidgetInfo(), isPlaying = false)
+                // While the player is running it has already told us what to show.
+                val last = WidgetRenderer.last
+                if (last != null) {
+                    WidgetRenderer.render(context, last.first, last.second)
+                } else {
+                    val saved = QueueStore(context).load()
+                    val item = saved?.items?.getOrNull(saved.index)
+                    WidgetRenderer.render(context, item?.toWidgetInfo(), isPlaying = false)
+                }
             } finally {
                 pending.finish()
             }
         }.start()
     }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        when (val action = intent.action) {
-            ACTION_PLAY_PAUSE, ACTION_NEXT, ACTION_PREVIOUS -> control(context, action)
-            else -> super.onReceive(context, intent)
-        }
-    }
-
-    /** Connects to the player for a moment, sends one command and lets go again. */
-    private fun control(context: Context, action: String) {
-        val pending = goAsync()
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
-        val main = Handler(Looper.getMainLooper())
-        var finished = false
-        fun done() {
-            if (finished) return
-            finished = true
-            MediaController.releaseFuture(future)
-            pending.finish()
-        }
-        future.addListener(
-            {
-                val c = try {
-                    future.get()
-                } catch (_: Exception) {
-                    done()
-                    return@addListener
-                }
-                val run = {
-                    when (action) {
-                        ACTION_PLAY_PAUSE -> if (c.isPlaying) {
-                            c.pause()
-                        } else {
-                            if (c.playbackState == Player.STATE_IDLE) c.prepare()
-                            if (c.playbackState == Player.STATE_ENDED) c.seekTo(0, 0L)
-                            c.play()
-                        }
-                        ACTION_NEXT -> c.seekToNextMediaItem()
-                        ACTION_PREVIOUS -> c.seekToPrevious()
-                    }
-                    // Give the command a moment to reach the service before disconnecting.
-                    main.postDelayed(::done, 500)
-                }
-                if (c.mediaItemCount > 0) {
-                    run()
-                } else {
-                    // The service was just started and is still loading the saved queue.
-                    c.addListener(object : Player.Listener {
-                        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
-                            if (c.mediaItemCount > 0) {
-                                c.removeListener(this)
-                                run()
-                            }
-                        }
-                    })
-                    main.postDelayed(::done, 3000)
-                }
-            },
-            ContextCompat.getMainExecutor(context),
-        )
-    }
-
-    companion object {
-        const val ACTION_PLAY_PAUSE = "com.suna.player.widget.PLAY_PAUSE"
-        const val ACTION_NEXT = "com.suna.player.widget.NEXT"
-        const val ACTION_PREVIOUS = "com.suna.player.widget.PREVIOUS"
-    }
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
 object WidgetRenderer {
     private var artAlbumId = Long.MIN_VALUE
     private var art: Bitmap? = null
 
+    /** What was last drawn, for widgets added while music is already playing. */
+    @Volatile
+    var last: Pair<WidgetInfo?, Boolean>? = null
+        private set
+
     /** Call off the main thread: it may load the album art. */
     @Synchronized
     fun render(context: Context, info: WidgetInfo?, isPlaying: Boolean) {
+        last = info to isPlaying
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(ComponentName(context, PlayerWidget::class.java))
         if (ids.isEmpty()) return
 
         val views = RemoteViews(context.packageName, R.layout.widget_player)
-        views.setTextViewText(R.id.widget_title, info?.title ?: "SunaPlay")
-        views.setTextViewText(R.id.widget_artist, info?.artist ?: "tap to open")
+        views.setTextViewText(R.id.widget_title, info?.title ?: context.getString(R.string.app_name))
+        views.setTextViewText(R.id.widget_artist, info?.artist ?: "Tap to open")
 
         val bitmap = info?.let { loadArt(context, it.albumId) }
         if (bitmap != null) {
@@ -147,29 +89,30 @@ object WidgetRenderer {
         )
         views.setContentDescription(R.id.widget_play, if (isPlaying) "Pause" else "Play")
 
-        views.setOnClickPendingIntent(
-            android.R.id.background,
-            PendingIntent.getActivity(
-                context,
-                0,
-                Intent(context, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            ),
+        val openApp = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        views.setOnClickPendingIntent(R.id.widget_play, command(context, PlayerWidget.ACTION_PLAY_PAUSE, 1))
-        views.setOnClickPendingIntent(R.id.widget_next, command(context, PlayerWidget.ACTION_NEXT, 2))
-        views.setOnClickPendingIntent(R.id.widget_prev, command(context, PlayerWidget.ACTION_PREVIOUS, 3))
+        views.setOnClickPendingIntent(android.R.id.background, openApp)
+        // The buttons send the same media button intents as the notification, straight to the
+        // playback service. Play starts it as a foreground service so it works from a cold start.
+        views.setOnClickPendingIntent(
+            R.id.widget_play,
+            // With nothing to resume there is nothing to play yet: open the app instead.
+            if (info == null) openApp else command(context, Player.COMMAND_PLAY_PAUSE, foreground = !isPlaying),
+        )
+        views.setOnClickPendingIntent(R.id.widget_next, command(context, Player.COMMAND_SEEK_TO_NEXT))
+        views.setOnClickPendingIntent(R.id.widget_prev, command(context, Player.COMMAND_SEEK_TO_PREVIOUS))
 
         manager.updateAppWidget(ids, views)
     }
 
-    private fun command(context: Context, action: String, code: Int): PendingIntent =
-        PendingIntent.getBroadcast(
-            context,
-            code,
-            Intent(context, PlayerWidget::class.java).setAction(action),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+    private fun command(context: Context, command: Int, foreground: Boolean = false): PendingIntent =
+        PlaybackPendingIntentBuilder(context, command, PlaybackService::class.java)
+            .setStartAsForegroundService(foreground)
+            .build()
 
     /** Small enough to stay well under the widget size limit; reused while the album repeats. */
     private fun loadArt(context: Context, albumId: Long): Bitmap? {

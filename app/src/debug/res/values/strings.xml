@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The test build from Android Studio, so it is easy to tell apart on a device. -->
+    <string name="app_name">MU51C dev</string>
+</resources>
