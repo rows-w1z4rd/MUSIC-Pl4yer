@@ -67,6 +67,7 @@ class MediaStoreRepository(private val context: Context) {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.RELATIVE_PATH,
         )
         val result = ArrayList<Song>()
         context.contentResolver.query(
@@ -85,6 +86,7 @@ class MediaStoreRepository(private val context: Context) {
             val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val trackCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
             val addedCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val pathCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
             result.ensureCapacity(c.count)
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
@@ -99,6 +101,7 @@ class MediaStoreRepository(private val context: Context) {
                     durationMs = c.getLong(durationCol),
                     track = c.getInt(trackCol),
                     dateAdded = c.getLong(addedCol),
+                    folder = c.getString(pathCol) ?: "",
                     uri = ContentUris.withAppendedId(collection, id),
                 )
             }

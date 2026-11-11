@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -13,22 +14,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
@@ -48,29 +50,38 @@ import coil3.compose.AsyncImage
 import com.suna.player.data.Song
 import com.suna.player.data.albumArtUri
 import com.suna.player.ui.theme.LocalHasWallpaper
+import com.suna.player.ui.theme.MonoLabel
 
 /** Height the floating mini player covers at the bottom; lists add it as bottom padding. */
 val LocalMiniPlayerSpace = compositionLocalOf { 0.dp }
 
-/** Card color: dark grey on black, or a see-through veil when a wallpaper is set. */
-@Composable
-fun cardColor(): Color =
-    if (LocalHasWallpaper.current) {
-        Color.Black.copy(alpha = 0.38f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
+val PanelShape = RoundedCornerShape(16.dp)
 
-/** The large rounded panel that holds a screen's main content. */
+/** Panel color: the palette's panel, or a frosted veil over a wallpaper. */
 @Composable
-fun ContentCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(
-        color = cardColor(),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        modifier = modifier.fillMaxWidth(),
-        content = content,
-    )
+fun cardColor(): Color {
+    val panel = MaterialTheme.colorScheme.surfaceContainerLow
+    return if (LocalHasWallpaper.current) panel.copy(alpha = 0.58f) else panel
+}
+
+/** Hairline outline that gives panels their edge, like windows in a tiling desktop. */
+@Composable
+fun borderColor(): Color {
+    val border = MaterialTheme.colorScheme.outlineVariant
+    return if (LocalHasWallpaper.current) Color.White.copy(alpha = 0.10f) else border
+}
+
+/** A floating panel with a thin outline, separated from the screen edges by a small gap. */
+@Composable
+fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(
+        modifier
+            .padding(horizontal = 8.dp)
+            .fillMaxWidth()
+            .clip(PanelShape)
+            .background(cardColor())
+            .border(1.dp, borderColor(), PanelShape),
+    ) { content() }
 }
 
 /** Clickable that shrinks slightly while pressed, settling without any bounce. */
@@ -95,7 +106,7 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier = composed {
 }
 
 @Composable
-fun Artwork(uri: Uri?, modifier: Modifier = Modifier, corner: Dp = 14.dp) {
+fun Artwork(uri: Uri?, modifier: Modifier = Modifier, corner: Dp = 8.dp) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(corner))
@@ -103,10 +114,10 @@ fun Artwork(uri: Uri?, modifier: Modifier = Modifier, corner: Dp = 14.dp) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Filled.MusicNote,
+            imageVector = Icons.Rounded.MusicNote,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxSize(0.5f),
+            modifier = Modifier.fillMaxSize(0.45f),
         )
         if (uri != null) {
             AsyncImage(
@@ -119,6 +130,39 @@ fun Artwork(uri: Uri?, modifier: Modifier = Modifier, corner: Dp = 14.dp) {
     }
 }
 
+/** Back arrow, title and optional actions; used by every screen below the library. */
+@Composable
+fun ScreenTopBar(
+    title: String,
+    onBack: () -> Unit,
+    subtitle: String? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+        }
+        Column(Modifier.weight(1f).padding(start = 4.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) {
+                Text(subtitle, style = MonoLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        actions()
+    }
+}
+
 @Composable
 fun SongRow(
     song: Song,
@@ -126,47 +170,49 @@ fun SongRow(
     onPlayNext: () -> Unit,
     onOptions: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Small monospace note on the right, such as a play count. */
+    info: String? = null,
 ) {
-    Column(modifier.clickable(onClick = onClick)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 20.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-        ) {
-            Artwork(albumArtUri(song.albumId), Modifier.size(52.dp))
-            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                Text(
-                    song.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    song.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            IconButton(onClick = onPlayNext) {
-                Icon(
-                    Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = "Play ${song.title} next",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onOptions) {
-                Icon(
-                    Icons.Filled.MoreVert,
-                    contentDescription = "Options for ${song.title}",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 14.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
+    ) {
+        Artwork(albumArtUri(song.albumId), Modifier.size(48.dp))
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(
+                song.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                song.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-            modifier = Modifier.padding(start = 88.dp, end = 20.dp),
-        )
+        if (info != null) {
+            Text(info, style = MonoLabel, color = MaterialTheme.colorScheme.primary)
+        }
+        IconButton(onClick = onPlayNext) {
+            Icon(
+                Icons.AutoMirrored.Rounded.PlaylistAdd,
+                contentDescription = "Play ${song.title} next",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onOptions) {
+            Icon(
+                Icons.Rounded.MoreVert,
+                contentDescription = "Options for ${song.title}",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -178,18 +224,77 @@ fun SongList(
     onOptions: (Song) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    info: ((Song) -> String?)? = null,
+    header: (@Composable () -> Unit)? = null,
 ) {
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
+        if (header != null) item(key = "header") { header() }
         itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
             SongRow(
                 song = song,
                 onClick = { onPlay(index) },
                 onPlayNext = { onPlayNext(song) },
                 onOptions = { onOptions(song) },
+                info = info?.invoke(song),
             )
         }
     }
 }
+
+/** A list row with a square icon badge, a title and an optional second line. */
+@Composable
+fun SimpleRow(
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                content = icon,
+            )
+        }
+        Column(Modifier.padding(start = 14.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MonoLabel,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyMessage(text: String) {
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Text(text, style = MonoLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+fun songCount(n: Int) = if (n == 1) "1 song" else "$n songs"
 
 fun formatTime(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)

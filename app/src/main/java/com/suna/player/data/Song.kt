@@ -15,20 +15,33 @@ data class Song(
     val track: Int,
     /** Seconds since 1970, as recorded by the phone's media index. */
     val dateAdded: Long,
+    /** Folder on the phone, like "Music/Rap/". */
+    val folder: String,
     val uri: Uri,
 )
 
 enum class SongSort(val label: String) {
-    TITLE("Title"),
-    DATE_ADDED("Date added"),
-    ARTIST("Artist"),
+    TITLE("title"),
+    DATE_ADDED("date added"),
+    ARTIST("artist"),
+    PLAYS("most played"),
 }
 
-fun List<Song>.sortedFor(sort: SongSort): List<Song> = when (sort) {
+fun List<Song>.sortedFor(sort: SongSort, plays: Map<Long, SongPlays>): List<Song> = when (sort) {
     SongSort.TITLE -> this // already sorted by title when loaded
     SongSort.DATE_ADDED -> sortedByDescending { it.dateAdded }
     SongSort.ARTIST -> sortedWith(compareBy({ it.artist.lowercase() }, { it.title.lowercase() }))
+    SongSort.PLAYS -> sortedByDescending { plays[it.id]?.playCount ?: 0 }
 }
+
+data class Folder(val path: String, val name: String, val songCount: Int)
+
+fun List<Song>.toFolders(): List<Folder> =
+    groupBy { it.folder }
+        .map { (path, songs) ->
+            Folder(path, path.trimEnd('/').substringAfterLast('/').ifEmpty { "Phone" }, songs.size)
+        }
+        .sortedBy { it.name.lowercase() }
 
 data class Album(
     val id: Long,

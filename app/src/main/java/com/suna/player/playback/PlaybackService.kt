@@ -9,11 +9,17 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import com.suna.player.MainActivity
+import com.suna.player.R
+import com.suna.player.SunaApp
+import com.suna.player.widget.WidgetRenderer
+import com.suna.player.widget.toWidgetInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +36,7 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private lateinit var player: ExoPlayer
     private lateinit var store: QueueStore
+    private val app get() = application as SunaApp
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val io = Dispatchers.IO.limitedParallelism(1) // keeps saves in order
@@ -71,10 +78,21 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        // The status bar and notification show an electric guitar instead of a play symbol.
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build().apply {
+                setSmallIcon(R.drawable.ic_stat_guitar)
+            },
+        )
+
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(SessionCallback())
             .build()
+
+        scope.launch {
+            app.settings.skipSilence.collect { player.skipSilenceEnabled = it }
+        }
 
         restoreQueue()
     }
@@ -96,6 +114,7 @@ class PlaybackService : MediaSessionService() {
             restoreDone = true
             // If the user started something before the restore finished, record that instead.
             if (player.mediaItemCount > 0) saveQueue()
+            updateWidget()
         }
     }
 
@@ -107,6 +126,20 @@ class PlaybackService : MediaSessionService() {
     private fun savePosition() {
         if (!restoreDone) return
         store.savePosition(player.currentMediaItemIndex, player.currentPosition.coerceAtLeast(0))
+    }
+
+    /** Counts a play for the statistics and the "most played" page. */
+    private fun recordPlay(item: MediaItem, listenedMs: Long) {
+        val songId = item.mediaId.toLongOrNull() ?: return
+        scope.launch(Dispatchers.IO) { app.db.stats().recordPlay(songId, listenedMs) }
+    }
+
+    /** Refreshes home screen widgets, if there are any. */
+    private fun updateWidget() {
+        val info = player.currentMediaItem?.toWidgetInfo()
+        val playing = player.isPlaying
+        val context = applicationContext
+        scope.launch(Dispatchers.IO) { WidgetRenderer.render(context, info, playing) }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
@@ -121,6 +154,9 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         savePosition()
+        val info = player.currentMediaItem?.toWidgetInfo()
+        val context = applicationContext
+        Thread { WidgetRenderer.render(context, info, isPlaying = false) }.start()
         session?.release()
         session = null
         player.release()
@@ -130,6 +166,14 @@ class PlaybackService : MediaSessionService() {
 
     private inner class PlayerEvents : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
+            if (events.containsAny(
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                    Player.EVENT_IS_PLAYING_CHANGED,
+                    Player.EVENT_MEDIA_METADATA_CHANGED,
+                )
+            ) {
+                updateWidget()
+            }
             if (!restoreDone) return
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) saveQueue()
             if (events.contains(Player.EVENT_REPEAT_MODE_CHANGED)) {
@@ -146,6 +190,29 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        /**
+         * A song counts as played when it finishes, or when it is left after 30 seconds or more.
+         */
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            val item = oldPosition.mediaItem ?: return
+            val finished = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
+            val left = oldPosition.mediaItemIndex != newPosition.mediaItemIndex
+            if (finished || (left && oldPosition.positionMs >= MIN_COUNTED_MS)) {
+                recordPlay(item, oldPosition.positionMs)
+            }
+        }
+
+        /** The last song of the queue ends without a transition, so it is counted here. */
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) {
+                player.currentMediaItem?.let { recordPlay(it, player.duration.coerceAtLeast(0)) }
+            }
+        }
+
         /** A file that was deleted or cannot be decoded is skipped instead of stopping. */
         override fun onPlayerError(error: PlaybackException) {
             if (player.hasNextMediaItem()) {
@@ -155,7 +222,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private class SessionCallback : MediaSession.Callback {
+    private inner class SessionCallback : MediaSession.Callback {
         /** Items sent from the UI lose their playable address on the way; restore it here. */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
@@ -167,5 +234,36 @@ class PlaybackService : MediaSessionService() {
             }.toMutableList()
             return Futures.immediateFuture(resolved)
         }
+
+        /**
+         * Headphone buttons and the system can ask to resume after the app was closed:
+         * hand back the saved queue and position.
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val result = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            scope.launch {
+                val saved = withContext(io) { store.load() }
+                if (saved == null || saved.items.isEmpty()) {
+                    result.setException(UnsupportedOperationException("Nothing to resume"))
+                } else {
+                    result.set(
+                        MediaSession.MediaItemsWithStartPosition(
+                            saved.items,
+                            saved.index.coerceIn(0, saved.items.lastIndex),
+                            saved.positionMs.coerceAtLeast(0),
+                        ),
+                    )
+                }
+            }
+            return result
+        }
+    }
+
+    private companion object {
+        const val MIN_COUNTED_MS = 30_000L
     }
 }

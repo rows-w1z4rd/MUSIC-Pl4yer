@@ -2,20 +2,23 @@ package com.suna.player
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,10 +31,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -46,20 +49,22 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.suna.player.data.Appearance
 import com.suna.player.data.Song
+import com.suna.player.ui.common.LocalMiniPlayerSpace
 import com.suna.player.ui.library.AddToPlaylistDialog
 import com.suna.player.ui.library.DeletePlaylistDialog
 import com.suna.player.ui.library.LibraryScreen
 import com.suna.player.ui.library.PlaylistNameDialog
 import com.suna.player.ui.library.SongListScreen
 import com.suna.player.ui.library.SongOptionsSheet
-import com.suna.player.ui.player.MiniPlayer
 import com.suna.player.ui.player.MiniPlayerSpace
-import com.suna.player.ui.common.LocalMiniPlayerSpace
-import com.suna.player.ui.player.NowPlayingScreen
+import com.suna.player.ui.player.PlayerSheet
 import com.suna.player.ui.player.QueueScreen
-import com.suna.player.ui.settings.AppearanceScreen
+import com.suna.player.ui.player.collapse
+import com.suna.player.ui.settings.SettingsScreen
+import com.suna.player.ui.settings.WallpaperEditor
 import com.suna.player.ui.theme.AppBackground
 import com.suna.player.ui.theme.SunaTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -87,8 +92,8 @@ class MainActivity : ComponentActivity() {
             }
 
             SunaTheme(current) {
-                AppBackground(wallpaper = wallpaper, dim = current?.dim ?: 0f) {
-                    if (current != null) AppRoot(app, current)
+                AppBackground(wallpaper = wallpaper, appearance = current) {
+                    if (current != null) AppRoot(app, current, wallpaper)
                 }
             }
         }
@@ -107,12 +112,13 @@ class MainActivity : ComponentActivity() {
 
 private object Routes {
     const val LIBRARY = "library"
-    const val PLAYER = "player"
     const val QUEUE = "queue"
-    const val APPEARANCE = "appearance"
+    const val SETTINGS = "settings"
+    const val WALLPAPER = "wallpaper"
     const val ALBUM = "album/{id}"
     const val ARTIST = "artist/{id}"
     const val PLAYLIST = "playlist/{id}"
+    const val FOLDER = "folder/{path}"
 }
 
 /** Which song the options sheet is open for, and from which playlist (if any). */
@@ -122,7 +128,7 @@ private data class OptionsTarget(val song: Song, val playlistId: Long?)
 private data class NewPlaylistRequest(val song: Song?)
 
 @Composable
-private fun AppRoot(app: SunaApp, appearance: Appearance) {
+private fun AppRoot(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap?) {
     val context = LocalContext.current
     var granted by remember {
         mutableStateOf(
@@ -138,182 +144,215 @@ private fun AppRoot(app: SunaApp, appearance: Appearance) {
         PermissionScreen(onAllow = { askPermission.launch(Manifest.permission.READ_MEDIA_AUDIO) })
     } else {
         LaunchedEffect(Unit) { app.library.start() }
-        MainContent(app, appearance)
+        MainContent(app, appearance, wallpaper)
     }
 }
 
 @Composable
-private fun MainContent(app: SunaApp, appearance: Appearance) {
+private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap?) {
     val player = app.player
     val songs by app.library.songs.collectAsStateWithLifecycle()
     val loaded by app.library.loaded.collectAsStateWithLifecycle()
     val playlists by app.playlists.playlists.collectAsStateWithLifecycle()
+    val plays by app.stats.plays.collectAsStateWithLifecycle()
+    val skipSilence by app.settings.skipSilence.collectAsStateWithLifecycle(initialValue = false)
     val playerState by player.state.collectAsStateWithLifecycle()
     val songsById = remember(songs) { songs.associateBy { it.id } }
 
     val nav = rememberNavController()
     val backStackEntry by nav.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
+    val scope = rememberCoroutineScope()
 
     var optionsFor by remember { mutableStateOf<OptionsTarget?>(null) }
     var addToPlaylist by remember { mutableStateOf<Song?>(null) }
     var newPlaylist by remember { mutableStateOf<NewPlaylistRequest?>(null) }
 
+    // 0 = the player is a bar at the bottom, 1 = it fills the screen.
+    val expansion = remember { Animatable(0f) }
     val current = playerState.current
-    val showMiniPlayer = current != null && route != Routes.PLAYER && route != Routes.QUEUE
+    val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER
     val playNext: (Song) -> Unit = { player.playNext(listOf(it)) }
+    val openSongOptions: (Song) -> Unit = { optionsFor = OptionsTarget(it, playlistId = null) }
 
-    // The mini player floats over the content; lists pad their bottom by this much.
+    // Back closes the full screen player before leaving the page under it.
+    BackHandler(enabled = showPlayer && expansion.targetValue > 0f) {
+        scope.launch { expansion.collapse() }
+    }
+    LaunchedEffect(showPlayer) { if (!showPlayer) expansion.snapTo(0f) }
+
     Box(Modifier.fillMaxSize()) {
-      CompositionLocalProvider(
-        LocalMiniPlayerSpace provides if (showMiniPlayer) MiniPlayerSpace else 0.dp,
-      ) {
-        NavHost(
-            navController = nav,
-            startDestination = Routes.LIBRARY,
-            modifier = Modifier.fillMaxSize(),
+        CompositionLocalProvider(
+            LocalMiniPlayerSpace provides if (showPlayer) MiniPlayerSpace else 0.dp,
         ) {
-            composable(Routes.LIBRARY) {
-                LibraryScreen(
-                    songs = songs,
-                    loaded = loaded,
-                    onPlay = { list, index -> player.play(list, index) },
-                    onShuffle = { player.shuffleAll(it) },
-                    onPlayNext = playNext,
-                    onSongOptions = { optionsFor = OptionsTarget(it, playlistId = null) },
-                    onOpenAlbum = { nav.navigate("album/$it") },
-                    onOpenArtist = { nav.navigate("artist/$it") },
-                    playlists = playlists,
-                    onOpenPlaylist = { nav.navigate("playlist/$it") },
-                    onNewPlaylist = { newPlaylist = NewPlaylistRequest(song = null) },
-                    onOpenSettings = { nav.navigate(Routes.APPEARANCE) { launchSingleTop = true } },
-                )
-            }
-            composable(
-                Routes.ALBUM,
-                arguments = listOf(navArgument("id") { type = NavType.LongType }),
-            ) { entry ->
-                val id = entry.arguments?.getLong("id") ?: -1L
-                val albumSongs = remember(songs, id) {
-                    songs.filter { it.albumId == id }.sortedBy { it.track }
-                }
-                SongListScreen(
-                    title = albumSongs.firstOrNull()?.album ?: "Album",
-                    songs = albumSongs,
-                    onBack = { nav.popBackStack() },
-                    onPlay = { player.play(albumSongs, it) },
-                    onShuffle = { player.shuffleAll(albumSongs) },
-                    onPlayNext = playNext,
-                    onSongOptions = { optionsFor = OptionsTarget(it, playlistId = null) },
-                )
-            }
-            composable(
-                Routes.ARTIST,
-                arguments = listOf(navArgument("id") { type = NavType.LongType }),
-            ) { entry ->
-                val id = entry.arguments?.getLong("id") ?: -1L
-                val artistSongs = remember(songs, id) { songs.filter { it.artistId == id } }
-                SongListScreen(
-                    title = artistSongs.firstOrNull()?.artist ?: "Artist",
-                    songs = artistSongs,
-                    onBack = { nav.popBackStack() },
-                    onPlay = { player.play(artistSongs, it) },
-                    onShuffle = { player.shuffleAll(artistSongs) },
-                    onPlayNext = playNext,
-                    onSongOptions = { optionsFor = OptionsTarget(it, playlistId = null) },
-                )
-            }
-            composable(
-                Routes.PLAYLIST,
-                arguments = listOf(navArgument("id") { type = NavType.LongType }),
-            ) { entry ->
-                val id = entry.arguments?.getLong("id") ?: -1L
-                val playlist = playlists.find { it.id == id }
-                val playlistSongs = remember(playlist, songsById) {
-                    playlist?.songIds?.mapNotNull { songsById[it] } ?: emptyList()
-                }
-                var renaming by remember { mutableStateOf(false) }
-                var deleting by remember { mutableStateOf(false) }
-
-                SongListScreen(
-                    title = playlist?.name ?: "Playlist",
-                    songs = playlistSongs,
-                    onBack = { nav.popBackStack() },
-                    onPlay = { player.play(playlistSongs, it) },
-                    onShuffle = { player.shuffleAll(playlistSongs) },
-                    onPlayNext = playNext,
-                    onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
-                    actions = {
-                        IconButton(onClick = { renaming = true }) {
-                            Icon(Icons.Filled.Edit, contentDescription = "Rename playlist")
-                        }
-                        IconButton(onClick = { deleting = true }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Delete playlist")
-                        }
-                    },
-                )
-
-                if (renaming && playlist != null) {
-                    PlaylistNameDialog(
-                        title = "Rename playlist",
-                        initialName = playlist.name,
-                        confirmLabel = "Rename",
-                        onConfirm = { app.playlists.rename(id, it) },
-                        onDismiss = { renaming = false },
+            NavHost(
+                navController = nav,
+                startDestination = Routes.LIBRARY,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                composable(Routes.LIBRARY) {
+                    LibraryScreen(
+                        songs = songs,
+                        loaded = loaded,
+                        headerText = appearance.headerText,
+                        tabs = appearance.tabs,
+                        plays = plays,
+                        playlists = playlists,
+                        onPlay = { list, index -> player.play(list, index) },
+                        onShuffle = { player.shuffleAll(it) },
+                        onPlayNext = playNext,
+                        onSongOptions = openSongOptions,
+                        onOpenAlbum = { nav.navigate("album/$it") },
+                        onOpenArtist = { nav.navigate("artist/$it") },
+                        onOpenFolder = { nav.navigate("folder/${Uri.encode(it)}") },
+                        onOpenPlaylist = { nav.navigate("playlist/$it") },
+                        onNewPlaylist = { newPlaylist = NewPlaylistRequest(song = null) },
+                        onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
                     )
                 }
-                if (deleting && playlist != null) {
-                    DeletePlaylistDialog(
-                        name = playlist.name,
-                        onConfirm = {
-                            nav.popBackStack()
-                            app.playlists.delete(id)
+                composable(
+                    Routes.ALBUM,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong("id") ?: -1L
+                    val albumSongs = remember(songs, id) {
+                        songs.filter { it.albumId == id }.sortedBy { it.track }
+                    }
+                    SongListScreen(
+                        title = albumSongs.firstOrNull()?.album ?: "Album",
+                        songs = albumSongs,
+                        onBack = { nav.popBackStack() },
+                        onPlay = { player.play(albumSongs, it) },
+                        onShuffle = { player.shuffleAll(albumSongs) },
+                        onPlayNext = playNext,
+                        onSongOptions = openSongOptions,
+                    )
+                }
+                composable(
+                    Routes.ARTIST,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong("id") ?: -1L
+                    val artistSongs = remember(songs, id) { songs.filter { it.artistId == id } }
+                    SongListScreen(
+                        title = artistSongs.firstOrNull()?.artist ?: "Artist",
+                        songs = artistSongs,
+                        onBack = { nav.popBackStack() },
+                        onPlay = { player.play(artistSongs, it) },
+                        onShuffle = { player.shuffleAll(artistSongs) },
+                        onPlayNext = playNext,
+                        onSongOptions = openSongOptions,
+                    )
+                }
+                composable(
+                    Routes.FOLDER,
+                    arguments = listOf(navArgument("path") { type = NavType.StringType }),
+                ) { entry ->
+                    val path = entry.arguments?.getString("path").orEmpty()
+                    val folderSongs = remember(songs, path) { songs.filter { it.folder == path } }
+                    SongListScreen(
+                        title = path.trimEnd('/').substringAfterLast('/').ifEmpty { "Phone" },
+                        songs = folderSongs,
+                        onBack = { nav.popBackStack() },
+                        onPlay = { player.play(folderSongs, it) },
+                        onShuffle = { player.shuffleAll(folderSongs) },
+                        onPlayNext = playNext,
+                        onSongOptions = openSongOptions,
+                    )
+                }
+                composable(
+                    Routes.PLAYLIST,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong("id") ?: -1L
+                    val playlist = playlists.find { it.id == id }
+                    val playlistSongs = remember(playlist, songsById) {
+                        playlist?.songIds?.mapNotNull { songsById[it] } ?: emptyList()
+                    }
+                    var renaming by remember { mutableStateOf(false) }
+                    var deleting by remember { mutableStateOf(false) }
+
+                    SongListScreen(
+                        title = playlist?.name ?: "Playlist",
+                        songs = playlistSongs,
+                        onBack = { nav.popBackStack() },
+                        onPlay = { player.play(playlistSongs, it) },
+                        onShuffle = { player.shuffleAll(playlistSongs) },
+                        onPlayNext = playNext,
+                        onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
+                        actions = {
+                            IconButton(onClick = { renaming = true }) {
+                                Icon(Icons.Rounded.Edit, contentDescription = "Rename playlist")
+                            }
+                            IconButton(onClick = { deleting = true }) {
+                                Icon(Icons.Rounded.Delete, contentDescription = "Delete playlist")
+                            }
                         },
-                        onDismiss = { deleting = false },
+                    )
+
+                    if (renaming && playlist != null) {
+                        PlaylistNameDialog(
+                            title = "Rename playlist",
+                            initialName = playlist.name,
+                            confirmLabel = "Rename",
+                            onConfirm = { app.playlists.rename(id, it) },
+                            onDismiss = { renaming = false },
+                        )
+                    }
+                    if (deleting && playlist != null) {
+                        DeletePlaylistDialog(
+                            name = playlist.name,
+                            onConfirm = {
+                                nav.popBackStack()
+                                app.playlists.delete(id)
+                            },
+                            onDismiss = { deleting = false },
+                        )
+                    }
+                }
+                composable(Routes.QUEUE) {
+                    QueueScreen(
+                        state = playerState,
+                        onBack = { nav.popBackStack() },
+                        onPlayIndex = player::playQueueItem,
+                        onRemove = player::removeFromQueue,
                     )
                 }
-            }
-            composable(Routes.PLAYER) {
-                NowPlayingScreen(
-                    state = playerState,
-                    player = player,
-                    onClose = { nav.popBackStack() },
-                    onOpenQueue = { nav.navigate(Routes.QUEUE) { launchSingleTop = true } },
-                    onAddToPlaylist = playerState.current
-                        ?.mediaId?.toLongOrNull()
-                        ?.let { songsById[it] }
-                        ?.let { song -> { addToPlaylist = song } },
-                )
-            }
-            composable(Routes.QUEUE) {
-                QueueScreen(
-                    state = playerState,
-                    onBack = { nav.popBackStack() },
-                    onPlayIndex = player::playQueueItem,
-                    onRemove = player::removeFromQueue,
-                )
-            }
-            composable(Routes.APPEARANCE) {
-                AppearanceScreen(
-                    appearance = appearance,
-                    settings = app.settings,
-                    wallpapers = app.wallpapers,
-                    onBack = { nav.popBackStack() },
-                )
+                composable(Routes.SETTINGS) {
+                    SettingsScreen(
+                        appearance = appearance,
+                        skipSilence = skipSilence,
+                        settings = app.settings,
+                        wallpapers = app.wallpapers,
+                        onBack = { nav.popBackStack() },
+                        onAdjustWallpaper = { nav.navigate(Routes.WALLPAPER) { launchSingleTop = true } },
+                    )
+                }
+                composable(Routes.WALLPAPER) {
+                    WallpaperEditor(
+                        wallpaper = wallpaper,
+                        appearance = appearance,
+                        onSave = { scale, x, y ->
+                            scope.launch { app.settings.setWallpaperPlacement(scale, x, y) }
+                        },
+                        onClose = { nav.popBackStack() },
+                    )
+                }
             }
         }
-      }
 
-        if (showMiniPlayer && current != null) {
-            MiniPlayer(
-                current = current,
-                isPlaying = playerState.isPlaying,
-                onOpen = { nav.navigate(Routes.PLAYER) { launchSingleTop = true } },
-                onPrevious = player::previous,
-                onTogglePlay = player::togglePlay,
-                onNext = player::next,
-                onOpenQueue = { nav.navigate(Routes.QUEUE) { launchSingleTop = true } },
-                modifier = Modifier.align(Alignment.BottomCenter),
+        if (showPlayer) {
+            PlayerSheet(
+                state = playerState,
+                player = player,
+                expansion = expansion,
+                onOpenQueue = {
+                    scope.launch { expansion.snapTo(0f) }
+                    nav.navigate(Routes.QUEUE) { launchSingleTop = true }
+                },
+                onAddToPlaylist = current.mediaId.toLongOrNull()
+                    ?.let { songsById[it] }
+                    ?.let { song -> { addToPlaylist = song } },
             )
         }
     }

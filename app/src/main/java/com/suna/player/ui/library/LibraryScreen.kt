@@ -1,12 +1,9 @@
 package com.suna.player.ui.library
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,93 +13,102 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.suna.player.R
 import com.suna.player.data.Album
 import com.suna.player.data.Artist
+import com.suna.player.data.Folder
+import com.suna.player.data.LibraryTab
 import com.suna.player.data.Playlist
 import com.suna.player.data.Song
+import com.suna.player.data.SongPlays
 import com.suna.player.data.SongSort
 import com.suna.player.data.albumArtUri
 import com.suna.player.data.sortedFor
 import com.suna.player.data.toAlbums
 import com.suna.player.data.toArtists
+import com.suna.player.data.toFolders
 import com.suna.player.ui.common.Artwork
-import com.suna.player.ui.common.ContentCard
+import com.suna.player.ui.common.EmptyMessage
 import com.suna.player.ui.common.LocalMiniPlayerSpace
+import com.suna.player.ui.common.Panel
+import com.suna.player.ui.common.SimpleRow
 import com.suna.player.ui.common.SongList
 import com.suna.player.ui.common.pressable
-
-private val tabs = listOf("Songs", "Albums", "Artists", "Playlists")
+import com.suna.player.ui.common.songCount
+import com.suna.player.ui.theme.MonoLabel
+import kotlinx.coroutines.launch
 
 @Composable
 fun LibraryScreen(
     songs: List<Song>,
     loaded: Boolean,
+    headerText: String,
+    tabs: List<LibraryTab>,
+    plays: Map<Long, SongPlays>,
+    playlists: List<Playlist>,
     onPlay: (list: List<Song>, index: Int) -> Unit,
     onShuffle: (list: List<Song>) -> Unit,
     onPlayNext: (Song) -> Unit,
     onSongOptions: (Song) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenArtist: (Long) -> Unit,
-    playlists: List<Playlist>,
+    onOpenFolder: (String) -> Unit,
     onOpenPlaylist: (Long) -> Unit,
     onNewPlaylist: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var sort by rememberSaveable { mutableStateOf(SongSort.TITLE) }
+    val pager = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
 
-    val sorted = remember(songs, sort) { songs.sortedFor(sort) }
-    val albums = remember(songs) { songs.toAlbums() }
-    val artists = remember(songs) { songs.toArtists() }
     val results = remember(songs, query) {
         val q = query.trim()
         if (q.isEmpty()) {
@@ -119,54 +125,77 @@ fun LibraryScreen(
     // Lists scroll under the floating mini player and the system navigation bar.
     val bottomSpace = LocalMiniPlayerSpace.current +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val listPadding = PaddingValues(top = 4.dp, bottom = bottomSpace + 8.dp)
+    val listPadding = PaddingValues(top = 6.dp, bottom = bottomSpace + 8.dp)
+
+    val icons: @Composable () -> Unit = {
+        IconButton(onClick = {
+            searching = !searching
+            if (!searching) query = ""
+        }) {
+            Icon(
+                if (searching) Icons.Rounded.Close else Icons.Rounded.Search,
+                contentDescription = if (searching) "Close search" else "Search",
+            )
+        }
+        IconButton(onClick = onOpenSettings) {
+            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+        }
+    }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        val hasHeader = headerText.isNotBlank()
+        if (hasHeader) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 20.dp, end = 4.dp, top = 16.dp),
+            ) {
+                Text(
+                    headerText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                icons()
+            }
+        }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 24.dp, end = 8.dp, top = 28.dp, bottom = 12.dp),
+            modifier = Modifier.padding(
+                start = 8.dp,
+                end = 4.dp,
+                top = if (hasHeader) 4.dp else 10.dp,
+                bottom = 8.dp,
+            ),
         ) {
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.3).sp,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = {
-                searching = !searching
-                if (!searching) query = ""
-            }) {
-                Icon(
-                    if (searching) Icons.Filled.Close else Icons.Filled.Search,
-                    contentDescription = if (searching) "Close search" else "Search",
-                )
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                if (searching) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        placeholder = { Text("search songs, artists, albums", style = MonoLabel) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
+                    )
+                } else {
+                    TabBar(
+                        tabs = tabs,
+                        selected = pager.currentPage,
+                        onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+                    )
+                }
             }
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Filled.Palette, contentDescription = "Appearance")
-            }
+            if (!hasHeader) icons()
         }
 
-        if (searching) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                placeholder = { Text("Search songs, artists, albums") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            )
-        } else {
-            TabStrip(selected = tab, onSelect = { tab = it })
-        }
-
-        ContentCard(Modifier.weight(1f)) {
+        Panel(Modifier.weight(1f)) {
             when {
                 searching && query.isNotBlank() && results.isEmpty() ->
-                    EmptyMessage("No matches for \"${query.trim()}\"")
+                    EmptyMessage("no matches for \"${query.trim()}\"")
                 searching -> SongList(
                     songs = results,
                     onPlay = { onPlay(results, it) },
@@ -174,113 +203,242 @@ fun LibraryScreen(
                     onOptions = onSongOptions,
                     contentPadding = listPadding,
                 )
-                !loaded -> Box(Modifier.fillMaxSize())
-                tab == 3 -> PlaylistList(playlists, onOpenPlaylist, onNewPlaylist, listPadding)
-                songs.isEmpty() -> EmptyMessage("No music found on this phone yet")
-                tab == 0 -> Column {
-                    SongsToolbar(
-                        sort = sort,
-                        onCycleSort = {
-                            sort = SongSort.entries[(sort.ordinal + 1) % SongSort.entries.size]
-                        },
-                        onShuffle = { onShuffle(sorted) },
-                        onPlayAll = { onPlay(sorted, 0) },
-                    )
-                    SongList(
-                        songs = sorted,
-                        onPlay = { onPlay(sorted, it) },
-                        onPlayNext = onPlayNext,
-                        onOptions = onSongOptions,
-                        contentPadding = listPadding,
-                    )
+                !loaded -> Spacer(Modifier.fillMaxSize())
+                else -> HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+                    when (tabs.getOrNull(page)) {
+                        LibraryTab.SONGS -> SongsPage(
+                            songs, plays, onPlay, onShuffle, onPlayNext, onSongOptions, listPadding,
+                        )
+                        LibraryTab.ALBUMS -> AlbumGrid(songs, onOpenAlbum, bottomSpace)
+                        LibraryTab.ARTISTS -> ArtistList(songs, onOpenArtist, listPadding)
+                        LibraryTab.PLAYLISTS ->
+                            PlaylistList(playlists, onOpenPlaylist, onNewPlaylist, listPadding)
+                        LibraryTab.FOLDERS -> FolderList(songs, onOpenFolder, listPadding)
+                        LibraryTab.MOST_PLAYED -> StatsPage(
+                            songs, plays, mostPlayed = true, onPlay, onPlayNext, onSongOptions, listPadding,
+                        )
+                        LibraryTab.RECENT -> StatsPage(
+                            songs, plays, mostPlayed = false, onPlay, onPlayNext, onSongOptions, listPadding,
+                        )
+                        null -> Spacer(Modifier.fillMaxSize())
+                    }
                 }
-                tab == 1 -> AlbumGrid(albums, onOpenAlbum, bottomSpace)
-                else -> ArtistList(artists, onOpenArtist, listPadding)
             }
         }
     }
 }
 
-/** Text-only tabs: the selected one is large and bright, the others small and dim. */
+/** Workspace-style tabs, like a Linux status bar: the active one is filled with the accent. */
 @Composable
-private fun TabStrip(selected: Int, onSelect: (Int) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+private fun TabBar(tabs: List<LibraryTab>, selected: Int, onSelect: (Int) -> Unit) {
+    val state = rememberLazyListState()
+    LaunchedEffect(selected) { if (selected in tabs.indices) state.animateScrollToItem(selected) }
+    val colors = MaterialTheme.colorScheme
+    LazyRow(
+        state = state,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp),
     ) {
-        tabs.forEachIndexed { index, label ->
-            val isSelected = selected == index
-            val size by animateFloatAsState(
-                targetValue = if (isSelected) 26f else 16f,
-                animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
-                label = "tabSize",
-            )
-            val base = MaterialTheme.colorScheme.onBackground
+        itemsIndexed(tabs, key = { _, tab -> tab.name }) { index, tab ->
+            val active = index == selected
+            val shape = RoundedCornerShape(8.dp)
             Text(
-                text = label,
-                fontSize = size.sp,
-                letterSpacing = if (isSelected) (-0.4).sp else 0.sp,
-                color = if (isSelected) base else base.copy(alpha = 0.55f),
+                text = tab.label,
+                style = MonoLabel.copy(
+                    fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color = if (active) colors.primary else colors.onSurfaceVariant,
                 modifier = Modifier
-                    .alignByBaseline()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(shape)
+                    .background(if (active) colors.primaryContainer else Color.Transparent)
+                    .border(
+                        1.dp,
+                        if (active) colors.primary.copy(alpha = 0.45f) else Color.Transparent,
+                        shape,
+                    )
                     .clickable { onSelect(index) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
             )
         }
     }
 }
 
 @Composable
-private fun SongsToolbar(
-    sort: SongSort,
-    onCycleSort: () -> Unit,
+private fun SongsPage(
+    songs: List<Song>,
+    plays: Map<Long, SongPlays>,
+    onPlay: (List<Song>, Int) -> Unit,
+    onShuffle: (List<Song>) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onSongOptions: (Song) -> Unit,
+    padding: PaddingValues,
+) {
+    var sort by rememberSaveable { mutableStateOf(SongSort.TITLE) }
+    val sorted = remember(songs, sort, if (sort == SongSort.PLAYS) plays else null) {
+        songs.sortedFor(sort, plays)
+    }
+    if (songs.isEmpty()) {
+        EmptyMessage("no music found on this phone yet")
+        return
+    }
+    SongList(
+        songs = sorted,
+        onPlay = { onPlay(sorted, it) },
+        onPlayNext = onPlayNext,
+        onOptions = onSongOptions,
+        contentPadding = padding,
+        header = {
+            ListToolbar(
+                label = "sort: ${sort.label}",
+                count = songs.size,
+                onLabel = { sort = SongSort.entries[(sort.ordinal + 1) % SongSort.entries.size] },
+                onShuffle = { onShuffle(sorted) },
+                onPlayAll = { onPlay(sorted, 0) },
+            )
+        },
+    )
+}
+
+/** Sort toggle on the left, song count, then shuffle and play-all on the right. */
+@Composable
+fun ListToolbar(
+    label: String?,
+    count: Int,
+    onLabel: (() -> Unit)?,
     onShuffle: () -> Unit,
     onPlayAll: () -> Unit,
 ) {
+    val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 12.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 10.dp, bottom = 4.dp),
     ) {
-        TextButton(
-            onClick = onCycleSort,
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.Sort,
-                contentDescription = "Change sort order",
-                modifier = Modifier.size(20.dp),
-            )
-            Text(sort.label, Modifier.padding(start = 8.dp))
+        if (label != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .then(if (onLabel != null) Modifier.clickable(onClick = onLabel) else Modifier)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.Sort,
+                    contentDescription = null,
+                    tint = colors.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(label, style = MonoLabel, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+            }
         }
+        Text(
+            "[$count]",
+            style = MonoLabel,
+            color = colors.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.padding(start = 6.dp),
+        )
         Spacer(Modifier.weight(1f))
-        FilledTonalIconButton(onClick = onShuffle) {
-            Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle all songs")
+        SquareButton(onClick = onShuffle) {
+            Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle", modifier = Modifier.size(20.dp))
         }
-        FilledTonalIconButton(onClick = onPlayAll, modifier = Modifier.padding(start = 8.dp)) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = "Play all songs")
+        SquareButton(onClick = onPlayAll, filled = true, modifier = Modifier.padding(start = 8.dp)) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = "Play all", modifier = Modifier.size(22.dp))
         }
     }
 }
 
+/** A small rounded-square button; [filled] uses the accent. */
 @Composable
-private fun AlbumGrid(albums: List<Album>, onOpen: (Long) -> Unit, bottomSpace: androidx.compose.ui.unit.Dp) {
+fun SquareButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    filled: Boolean = false,
+    size: Dp = 38.dp,
+    content: @Composable () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    androidx.compose.foundation.layout.Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size)
+            .clip(shape)
+            .background(if (filled) colors.primary else colors.surfaceContainerHighest)
+            .clickable(onClick = onClick),
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides
+                if (filled) colors.onPrimary else colors.onSurface,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun StatsPage(
+    songs: List<Song>,
+    plays: Map<Long, SongPlays>,
+    mostPlayed: Boolean,
+    onPlay: (List<Song>, Int) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onSongOptions: (Song) -> Unit,
+    padding: PaddingValues,
+) {
+    val list = remember(songs, plays, mostPlayed) {
+        val played = songs.filter { it.id in plays }
+        if (mostPlayed) {
+            played.sortedByDescending { plays.getValue(it.id).playCount }
+        } else {
+            played.sortedByDescending { plays.getValue(it.id).lastPlayedAt }
+        }
+    }
+    if (list.isEmpty()) {
+        EmptyMessage("nothing played yet")
+        return
+    }
+    val now = remember(plays) { System.currentTimeMillis() }
+    SongList(
+        songs = list,
+        onPlay = { onPlay(list, it) },
+        onPlayNext = onPlayNext,
+        onOptions = onSongOptions,
+        contentPadding = padding,
+        info = { song ->
+            val p = plays[song.id] ?: return@SongList null
+            if (mostPlayed) "${p.playCount}×" else timeAgo(now - p.lastPlayedAt)
+        },
+    )
+}
+
+private fun timeAgo(ms: Long): String {
+    val minutes = ms / 60_000
+    return when {
+        minutes < 1 -> "now"
+        minutes < 60 -> "${minutes}m"
+        minutes < 60 * 24 -> "${minutes / 60}h"
+        else -> "${minutes / (60 * 24)}d"
+    }
+}
+
+@Composable
+private fun AlbumGrid(songs: List<Song>, onOpen: (Long) -> Unit, bottomSpace: Dp) {
+    val albums: List<Album> = remember(songs) { songs.toAlbums() }
+    if (albums.isEmpty()) {
+        EmptyMessage("no albums")
+        return
+    }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 150.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = bottomSpace + 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        columns = GridCells.Adaptive(minSize = 140.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomSpace + 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         items(albums, key = { it.id }) { album ->
             Column(Modifier.pressable { onOpen(album.id) }) {
                 Artwork(
                     uri = albumArtUri(album.id),
-                    corner = 24.dp,
+                    corner = 12.dp,
                     modifier = Modifier.fillMaxWidth().aspectRatio(1f),
                 )
                 Text(
@@ -288,15 +446,15 @@ private fun AlbumGrid(albums: List<Album>, onOpen: (Long) -> Unit, bottomSpace: 
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp),
+                    modifier = Modifier.padding(top = 8.dp, start = 2.dp, end = 2.dp),
                 )
                 Text(
                     album.artist,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MonoLabel,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    modifier = Modifier.padding(horizontal = 2.dp),
                 )
             }
         }
@@ -304,15 +462,28 @@ private fun AlbumGrid(albums: List<Album>, onOpen: (Long) -> Unit, bottomSpace: 
 }
 
 @Composable
-private fun ArtistList(artists: List<Artist>, onOpen: (Long) -> Unit, padding: PaddingValues) {
+private fun ArtistList(songs: List<Song>, onOpen: (Long) -> Unit, padding: PaddingValues) {
+    val artists: List<Artist> = remember(songs) { songs.toArtists() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
         items(artists, key = { it.id }) { artist ->
+            SimpleRow(artist.name, songCount(artist.songCount), onClick = { onOpen(artist.id) }) {
+                Icon(Icons.Rounded.Person, contentDescription = null)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderList(songs: List<Song>, onOpen: (String) -> Unit, padding: PaddingValues) {
+    val folders: List<Folder> = remember(songs) { songs.toFolders() }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+        items(folders, key = { it.path }) { folder ->
             SimpleRow(
-                title = artist.name,
-                subtitle = if (artist.songCount == 1) "1 song" else "${artist.songCount} songs",
-                onClick = { onOpen(artist.id) },
+                title = folder.name,
+                subtitle = "${songCount(folder.songCount)} · ${folder.path.ifEmpty { "/" }}",
+                onClick = { onOpen(folder.path) },
             ) {
-                Icon(Icons.Filled.Person, contentDescription = null)
+                Icon(Icons.Rounded.Folder, contentDescription = null)
             }
         }
     }
@@ -328,66 +499,14 @@ private fun PlaylistList(
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
         item(key = "new") {
             SimpleRow(title = "New playlist", subtitle = null, onClick = onNew) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+                Icon(Icons.Rounded.Add, contentDescription = null)
             }
         }
         items(playlists, key = { it.id }) { playlist ->
-            val n = playlist.songIds.size
-            SimpleRow(
-                title = playlist.name,
-                subtitle = if (n == 1) "1 song" else "$n songs",
-                onClick = { onOpen(playlist.id) },
-            ) {
-                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
+            SimpleRow(playlist.name, songCount(playlist.songIds.size), onClick = { onOpen(playlist.id) }) {
+                Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null)
             }
         }
-    }
-}
-
-/** A list row with a round icon badge, a title and an optional second line. */
-@Composable
-private fun SimpleRow(
-    title: String,
-    subtitle: String?,
-    onClick: () -> Unit,
-    icon: @Composable () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(52.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) { icon() }
-        }
-        Column(Modifier.padding(start = 16.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyMessage(text: String) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        item(key = "end") { Spacer(Modifier.height(4.dp)) }
     }
 }
