@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.SunaPlay" parent="android:Theme.Material.NoActionBar">
+        <!-- Black from the first frame, before the app's own theme is drawn. -->
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
