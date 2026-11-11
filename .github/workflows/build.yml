@@ -1,0 +1,65 @@
+# Builds a signed APK on every push to main and publishes it as a GitHub Release,
+# so it can be downloaded and installed straight from the phone.
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Matches gradle/gradle-daemon-jvm.properties, so Gradle doesn't download its own JDK.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Unpack the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SUNAPLAY_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::The signing key secrets are missing. Run set-github-secrets.ps1 from the .sunaplay folder on your PC, then re-run this workflow."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "SUNAPLAY_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Test and build
+        env:
+          SUNAPLAY_KEYSTORE_PASSWORD: ${{ secrets.SUNAPLAY_KEYSTORE_PASSWORD }}
+          SUNAPLAY_KEY_ALIAS: ${{ secrets.SUNAPLAY_KEY_ALIAS }}
+          SUNAPLAY_KEY_PASSWORD: ${{ secrets.SUNAPLAY_KEY_PASSWORD }}
+        run: ./gradlew testDebugUnitTest assembleRelease
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: 0.1.${{ github.run_number }}
+        run: |
+          apk="SunaPlay-$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          git log -1 --format='%s%n%n%b' > notes.txt
+          gh release create "v$VERSION" "$apk" \
+            --title "SunaPlay $VERSION" \
+            --notes-file notes.txt \
+            --target "$GITHUB_SHA" \
+            --latest
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"

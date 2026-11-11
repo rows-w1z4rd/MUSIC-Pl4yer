@@ -11,8 +11,37 @@ android {
         applicationId = "com.suna.player"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // On GitHub Actions every build gets a higher number, so the phone accepts it as an update.
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.1.$build"
+    }
+
+    // The release key lives outside the repo: on GitHub it comes from the repository secrets,
+    // on this PC from the same environment variables. Without them, release builds use the debug key.
+    val releaseKey = System.getenv("SUNAPLAY_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+    signingConfigs {
+        if (releaseKey != null) {
+            create("release") {
+                storeFile = releaseKey
+                storePassword = System.getenv("SUNAPLAY_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SUNAPLAY_KEY_ALIAS")
+                keyPassword = System.getenv("SUNAPLAY_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+        debug {
+            // Lets a test build from this PC sit next to the GitHub build on the phone.
+            applicationIdSuffix = ".debug"
+        }
     }
 
     compileOptions {
