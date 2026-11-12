@@ -16,6 +16,9 @@ screen widget, and play counts kept on the device.
   <img src="docs/screenshots/03-long-press.webp" width="32%" alt="Long-press menu" />
 </p>
 
+**Install:** on your Android phone, open the [latest release](../../releases/latest) and tap the `.apk` file under
+*Assets*. Open the download, and when Android asks, allow your browser to install apps.
+
 ---
 
 ## What it does
