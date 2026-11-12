@@ -453,7 +453,15 @@ private fun SongsPage(
     onSongOptions: (Song) -> Unit,
     padding: PaddingValues,
 ) {
-    var sort by rememberSaveable { mutableStateOf(SongSort.TITLE) }
+    // The chosen order survives the app being cleared; newest first until one is picked.
+    val context = LocalContext.current
+    val uiPrefs = remember { context.getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    var sort by remember {
+        mutableStateOf(
+            SongSort.entries.firstOrNull { it.name == uiPrefs.getString(SONG_SORT, null) }
+                ?: SongSort.DATE_ADDED,
+        )
+    }
     val sorted = remember(songs, sort, if (sort == SongSort.PLAYS) plays else null) {
         songs.sortedFor(sort, plays)
     }
@@ -471,7 +479,10 @@ private fun SongsPage(
             ListToolbar(
                 label = sort.label,
                 count = songs.size,
-                onLabel = { sort = SongSort.entries[(sort.ordinal + 1) % SongSort.entries.size] },
+                onLabel = {
+                    sort = SongSort.entries[(sort.ordinal + 1) % SongSort.entries.size]
+                    uiPrefs.edit().putString(SONG_SORT, sort.name).apply()
+                },
                 onShuffle = { onShuffle(sorted) },
                 onPlayAll = { onPlay(sorted, 0) },
             )
@@ -746,3 +757,4 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 }
 
 private const val LAST_TAB = "last_tab"
+private const val SONG_SORT = "song_sort"

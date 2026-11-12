@@ -21,8 +21,8 @@ data class Song(
 )
 
 enum class SongSort(val label: String) {
-    TITLE("Title"),
     DATE_ADDED("Date added"),
+    TITLE("Title"),
     ARTIST("Artist"),
     PLAYS("Most played"),
 }
