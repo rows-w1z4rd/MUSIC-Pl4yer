@@ -58,6 +58,13 @@ enum class LibraryTab(val label: String) {
 
 val DefaultTabs = listOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.PLAYLISTS)
 
+/** What fills the screen around a wallpaper zoomed out smaller than the screen. */
+enum class WallpaperEdges(val label: String) {
+    BLACK("Black"),
+    /** A blurred copy of the picture filling the screen, so the painting seems to carry on. */
+    BLURRED("Blurred"),
+}
+
 data class Appearance(
     val palette: Palette = Palette.BLUE,
     /** Null uses the theme's own accent. */
@@ -77,6 +84,7 @@ data class Appearance(
     /** Wallpaper shift as a fraction of the screen's width and height. */
     val wallpaperX: Float = 0f,
     val wallpaperY: Float = 0f,
+    val wallpaperEdges: WallpaperEdges = WallpaperEdges.BLACK,
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -96,6 +104,7 @@ class SettingsStore(private val context: Context) {
             wallpaperScale = p[WP_SCALE] ?: 1f,
             wallpaperX = p[WP_X] ?: 0f,
             wallpaperY = p[WP_Y] ?: 0f,
+            wallpaperEdges = WallpaperEdges.entries.find { it.name == p[WP_EDGES] } ?: WallpaperEdges.BLACK,
         )
     }
 
@@ -145,7 +154,15 @@ class SettingsStore(private val context: Context) {
      * Saves everything chosen in the wallpaper preview in one go, so the app redraws once.
      * A new picture also switches to its colors, as picking one always did.
      */
-    suspend fun applyWallpaper(newPicture: Boolean, scale: Float, x: Float, y: Float, blur: Float, dim: Float) {
+    suspend fun applyWallpaper(
+        newPicture: Boolean,
+        scale: Float,
+        x: Float,
+        y: Float,
+        blur: Float,
+        dim: Float,
+        edges: WallpaperEdges,
+    ) {
         context.dataStore.edit {
             it[HAS_WALLPAPER] = true
             if (newPicture) {
@@ -158,6 +175,7 @@ class SettingsStore(private val context: Context) {
             it[WP_Y] = y.coerceIn(-1f, 1f)
             it[BLUR] = blur.coerceIn(0f, 1f)
             it[DIM] = dim.coerceIn(0f, 0.9f)
+            it[WP_EDGES] = edges.name
         }
     }
 
@@ -222,6 +240,7 @@ class SettingsStore(private val context: Context) {
         private val WP_SCALE = floatPreferencesKey("wallpaper_scale")
         private val WP_X = floatPreferencesKey("wallpaper_x")
         private val WP_Y = floatPreferencesKey("wallpaper_y")
+        private val WP_EDGES = stringPreferencesKey("wallpaper_edges")
         private val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
         private val AUDIO_OFFLOAD = booleanPreferencesKey("audio_offload")
         private val ENDLESS_PLAY = booleanPreferencesKey("endless_play")

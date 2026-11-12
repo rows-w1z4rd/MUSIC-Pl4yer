@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +61,7 @@ import com.suna.player.data.Palette
 import com.suna.player.data.SettingsStore
 import com.suna.player.data.Song
 import com.suna.player.data.WallpaperStore
+import com.suna.player.data.WallpaperEdges
 import com.suna.player.data.albumArtUri
 import com.suna.player.ui.common.Artwork
 import com.suna.player.ui.common.Panel
@@ -88,7 +91,7 @@ fun WallpaperEditor(
     appearance: Appearance,
     wallpapers: WallpaperStore,
     songs: List<Song>,
-    onApply: suspend (scale: Float, x: Float, y: Float, blur: Float, dim: Float) -> Unit,
+    onApply: suspend (scale: Float, x: Float, y: Float, blur: Float, dim: Float, edges: WallpaperEdges) -> Unit,
     onClose: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -99,6 +102,7 @@ fun WallpaperEditor(
     var y by remember { mutableFloatStateOf(if (newPicture) 0f else appearance.wallpaperY) }
     var blur by remember { mutableFloatStateOf(appearance.blur) }
     var dim by remember { mutableFloatStateOf(appearance.dim) }
+    var edges by remember { mutableStateOf(appearance.wallpaperEdges) }
     var controls by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
 
@@ -129,6 +133,7 @@ fun WallpaperEditor(
         wallpaperScale = scale,
         wallpaperX = x,
         wallpaperY = y,
+        wallpaperEdges = edges,
     )
 
     SunaTheme(look, picture) {
@@ -137,7 +142,7 @@ fun WallpaperEditor(
                 val screenW = constraints.maxWidth.toFloat()
                 val screenH = constraints.maxHeight.toFloat()
 
-                LibraryMock(look, songs)
+                LibraryMock(look, songs, showMiniBar = !controls)
 
                 // On top of the mock so its buttons can't be pressed; takes every gesture.
                 Box(
@@ -170,6 +175,8 @@ fun WallpaperEditor(
                             scale = scale,
                             blur = blur,
                             dim = dim,
+                            edges = edges,
+                            onEdges = { edges = it },
                             onFill = {
                                 scale = 1f
                                 x = 0f
@@ -193,7 +200,7 @@ fun WallpaperEditor(
                                 if (!saving) {
                                     saving = true
                                     scope.launch {
-                                        onApply(scale, x, y, blur, dim)
+                                        onApply(scale, x, y, blur, dim, edges)
                                         onClose()
                                     }
                                 }
@@ -212,6 +219,8 @@ private fun ControlPanel(
     scale: Float,
     blur: Float,
     dim: Float,
+    edges: WallpaperEdges,
+    onEdges: (WallpaperEdges) -> Unit,
     onFill: () -> Unit,
     onFit: () -> Unit,
     onBlur: (Float) -> Unit,
@@ -223,7 +232,7 @@ private fun ControlPanel(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.82f), shape)
+            .background(Color.Black.copy(alpha = 0.92f), shape)
             .border(1.dp, Color.White.copy(alpha = 0.10f), shape)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
@@ -238,6 +247,37 @@ private fun ControlPanel(
             TextButton(onClick = onFit) { Text("Whole picture") }
             Spacer(Modifier.weight(1f))
             Text("${(scale * 100).roundToInt()}%", style = SmallLabel, color = Color.White.copy(alpha = 0.7f))
+        }
+        // What fills the screen around the picture when it is zoomed out.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+            Text("Edges", fontSize = 14.sp, color = Color.White, modifier = Modifier.width(56.dp))
+            Row(
+                Modifier
+                    .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(50))
+                    .padding(3.dp),
+            ) {
+                WallpaperEdges.entries.forEach { option ->
+                    val on = option == edges
+                    Text(
+                        option.label,
+                        fontSize = 14.sp,
+                        color = if (on) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.75f),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (on) MaterialTheme.colorScheme.primary else Color.Transparent)
+                            .clickable { onEdges(option) }
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
+            }
+            if (scale >= 1f) {
+                Text(
+                    "shows when zoomed out",
+                    style = SmallLabel,
+                    color = Color.White.copy(alpha = 0.45f),
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
         }
         PanelSlider("Blur", blur, 0f..1f, onBlur)
         PanelSlider("Dim", dim, 0f..0.9f, onDim)
@@ -277,7 +317,7 @@ private fun PanelSlider(
  * the track panel with a few of your tracks, and the mini player. Nothing in it reacts.
  */
 @Composable
-private fun LibraryMock(look: Appearance, songs: List<Song>) {
+private fun LibraryMock(look: Appearance, songs: List<Song>, showMiniBar: Boolean) {
     val tabs = look.tabs
     val first = tabs.indexOf(LibraryTab.SONGS).coerceAtLeast(0)
     val shown = remember(songs) { songs.sortedByDescending { it.dateAdded }.take(10) }
@@ -304,10 +344,13 @@ private fun LibraryMock(look: Appearance, songs: List<Song>) {
                     modifier = Modifier.align(Alignment.Center),
                 )
                 if (!hasHeader) {
-                    Row(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)) {
-                        Icon(Icons.Rounded.Search, contentDescription = null)
-                        Spacer(Modifier.width(24.dp))
-                        Icon(Icons.Rounded.MoreVert, contentDescription = null)
+                    // Same 48dp touch size as the real buttons, so the tabs sit at the same height.
+                    Row(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) {
+                        listOf(Icons.Rounded.Search, Icons.Rounded.MoreVert).forEach { icon ->
+                            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                Icon(icon, contentDescription = null)
+                            }
+                        }
                     }
                 }
             }
@@ -318,7 +361,8 @@ private fun LibraryMock(look: Appearance, songs: List<Song>) {
                 }
             }
         }
-        shown.firstOrNull()?.let { MiniBarMock(it, Modifier.align(Alignment.BottomCenter)) }
+        // Hidden under the controls, where it would only show through as a ghost.
+        if (showMiniBar) shown.firstOrNull()?.let { MiniBarMock(it, Modifier.align(Alignment.BottomCenter)) }
     }
 }
 

@@ -26,6 +26,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.suna.player.data.WallpaperEdges
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -188,6 +191,7 @@ fun AppBackground(
                 scale = appearance.wallpaperScale,
                 x = appearance.wallpaperX,
                 y = appearance.wallpaperY,
+                edges = appearance.wallpaperEdges,
             )
             Box(
                 Modifier
@@ -209,25 +213,45 @@ fun AppBackground(
  * brings back the parts that filling the screen cut off.
  */
 @Composable
-fun WallpaperImage(wallpaper: ImageBitmap, scale: Float, x: Float, y: Float, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .fillMaxSize()
-            .clipToBounds()
-            .drawBehind {
-                val fill = max(size.width / wallpaper.width, size.height / wallpaper.height) * scale
-                val w = wallpaper.width * fill
-                val h = wallpaper.height * fill
-                drawImage(
-                    image = wallpaper,
-                    dstOffset = IntOffset(
-                        ((size.width - w) / 2 + x * size.width).roundToInt(),
-                        ((size.height - h) / 2 + y * size.height).roundToInt(),
-                    ),
-                    dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-                    filterQuality = FilterQuality.Medium,
-                )
-            },
+fun WallpaperImage(
+    wallpaper: ImageBitmap,
+    scale: Float,
+    x: Float,
+    y: Float,
+    modifier: Modifier = Modifier,
+    edges: WallpaperEdges = WallpaperEdges.BLACK,
+) {
+    Box(modifier.fillMaxSize().clipToBounds()) {
+        // Only needed when the picture doesn't cover the screen; drawn by the graphics chip.
+        if (edges == WallpaperEdges.BLURRED && scale < 1f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .blur(48.dp)
+                    .drawBehind {
+                        drawFitted(wallpaper, scale = 1f, x = 0f, y = 0f)
+                        // A touch darker, so the sharp picture stands out from its glow.
+                        drawRect(Color.Black.copy(alpha = 0.25f))
+                    },
+            )
+        }
+        Box(Modifier.fillMaxSize().drawBehind { drawFitted(wallpaper, scale, x, y) })
+    }
+}
+
+/** Draws [wallpaper] filling the area at scale 1, then zoomed and shifted. */
+private fun DrawScope.drawFitted(wallpaper: ImageBitmap, scale: Float, x: Float, y: Float) {
+    val fill = max(size.width / wallpaper.width, size.height / wallpaper.height) * scale
+    val w = wallpaper.width * fill
+    val h = wallpaper.height * fill
+    drawImage(
+        image = wallpaper,
+        dstOffset = IntOffset(
+            ((size.width - w) / 2 + x * size.width).roundToInt(),
+            ((size.height - h) / 2 + y * size.height).roundToInt(),
+        ),
+        dstSize = IntSize(w.roundToInt(), h.roundToInt()),
+        filterQuality = FilterQuality.Medium,
     )
 }
 

@@ -94,7 +94,8 @@ class WallpaperStore(private val context: Context) {
         }
 
     private companion object {
-        const val FULL_SIDE = 1600
+        // Tall enough that a picture filling a large phone screen is not stretched up.
+        const val FULL_SIDE = 2560
         const val BLUR_SIDE = 480
         const val MAX_RADIUS = 24
     }

@@ -703,7 +703,13 @@ private fun WallpaperPage(
                 .clickable(onClick = if (wallpaper != null) onAdjust else choose),
         ) {
             if (wallpaper != null) {
-                WallpaperImage(wallpaper, appearance.wallpaperScale, appearance.wallpaperX, appearance.wallpaperY)
+                WallpaperImage(
+                    wallpaper,
+                    appearance.wallpaperScale,
+                    appearance.wallpaperX,
+                    appearance.wallpaperY,
+                    edges = appearance.wallpaperEdges,
+                )
                 val veil = if (LocalIsLight.current) Color.White else Color.Black
                 Box(Modifier.fillMaxSize().background(veil.copy(alpha = appearance.dim)))
             } else {

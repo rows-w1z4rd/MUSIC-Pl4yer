@@ -371,9 +371,9 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                             appearance = appearance,
                             wallpapers = app.wallpapers,
                             songs = songs,
-                            onApply = { scale, x, y, blur, dim ->
+                            onApply = { scale, x, y, blur, dim, edges ->
                                 if (!newPicture || app.wallpapers.commitDraft()) {
-                                    app.settings.applyWallpaper(newPicture, scale, x, y, blur, dim)
+                                    app.settings.applyWallpaper(newPicture, scale, x, y, blur, dim, edges)
                                 }
                             },
                             onClose = { nav.popBackStack() },
