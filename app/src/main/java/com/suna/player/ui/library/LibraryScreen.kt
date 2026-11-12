@@ -1,5 +1,14 @@
 package com.suna.player.ui.library
 
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.DpOffset
@@ -261,7 +270,10 @@ fun LibraryScreen(
     }
 }
 
-/** Workspace-style tabs, like a Linux status bar: the active one is filled with the accent. */
+/**
+ * The library tabs. The active one is lit from below: a short accent line under the name with
+ * a soft glow rising from it, fading in as it is selected.
+ */
 @Composable
 private fun TabBar(tabs: List<LibraryTab>, selected: Int, onSelect: (Int) -> Unit) {
     val state = rememberLazyListState()
@@ -269,29 +281,56 @@ private fun TabBar(tabs: List<LibraryTab>, selected: Int, onSelect: (Int) -> Uni
     val colors = MaterialTheme.colorScheme
     LazyRow(
         state = state,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         contentPadding = PaddingValues(horizontal = 4.dp),
     ) {
         itemsIndexed(tabs, key = { _, tab -> tab.name }) { index, tab ->
             val active = index == selected
-            val shape = RoundedCornerShape(8.dp)
+            val lit by animateFloatAsState(
+                targetValue = if (active) 1f else 0f,
+                animationSpec = tween(220),
+                label = "tabLight",
+            )
+            val accent = colors.primary
             Text(
                 text = tab.label,
-                style = SmallLabel.copy(
-                    fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color = if (active) colors.primary else colors.onSurfaceVariant,
+                color = lerp(colors.onSurfaceVariant, colors.onSurface, lit),
                 modifier = Modifier
-                    .clip(shape)
-                    .background(if (active) colors.primaryContainer else Color.Transparent)
-                    .border(
-                        1.dp,
-                        if (active) colors.primary.copy(alpha = 0.45f) else Color.Transparent,
-                        shape,
-                    )
+                    // Drawn before the clip, so the light can spread past the tab's edges.
+                    .drawBehind {
+                        if (lit <= 0f) return@drawBehind
+                        val lineWidth = size.width * 0.42f
+                        val lineHeight = 2.5.dp.toPx()
+                        val bottom = size.height - 2.dp.toPx()
+                        val source = Offset(size.width / 2, bottom)
+                        val reach = size.width * 0.55f
+                        // A flattened pool of light rising from the line.
+                        scale(scaleX = 1f, scaleY = 0.6f, pivot = source) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    0f to accent.copy(alpha = 0.32f * lit),
+                                    0.55f to accent.copy(alpha = 0.10f * lit),
+                                    1f to Color.Transparent,
+                                    center = source,
+                                    radius = reach,
+                                ),
+                                radius = reach,
+                                center = source,
+                            )
+                        }
+                        drawRoundRect(
+                            color = accent.copy(alpha = lit),
+                            topLeft = Offset((size.width - lineWidth) / 2, bottom - lineHeight),
+                            size = Size(lineWidth, lineHeight),
+                            cornerRadius = CornerRadius(lineHeight / 2),
+                        )
+                    }
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable { onSelect(index) }
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                    .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 11.dp),
             )
         }
     }
