@@ -630,7 +630,8 @@ private fun AccentPage(appearance: Appearance, save: Save) {
                                 .border(2.5.dp, if (selected) color else Color.Transparent, CircleShape)
                                 .padding(5.dp)
                                 .clip(CircleShape)
-                                .background(color),
+                                .background(color)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
                         ) {
                             if (selected) {
                                 Icon(

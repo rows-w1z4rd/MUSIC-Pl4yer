@@ -41,6 +41,7 @@ enum class AccentHue(val label: String) {
     RED("Red"),
     ORANGE("Orange"),
     GOLD("Gold"),
+    BLACK("Black"),
 }
 
 /** Pages that can be shown in the library, in the user's chosen order. */

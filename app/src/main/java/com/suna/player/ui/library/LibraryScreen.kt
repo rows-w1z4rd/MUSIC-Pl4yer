@@ -1,5 +1,8 @@
 package com.suna.player.ui.library
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.snapshotFlow
+import android.content.Context
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.draw.drawWithContent
@@ -135,7 +138,18 @@ fun LibraryScreen(
 ) {
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    val pager = rememberPagerState(pageCount = { tabs.size })
+    // The library reopens on the tab it was left on, even after the app was cleared.
+    val context = LocalContext.current
+    val uiPrefs = remember { context.getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    val startPage = remember(tabs) {
+        tabs.indexOfFirst { it.name == uiPrefs.getString(LAST_TAB, null) }.coerceAtLeast(0)
+    }
+    val pager = rememberPagerState(initialPage = startPage, pageCount = { tabs.size })
+    LaunchedEffect(pager, tabs) {
+        snapshotFlow { pager.settledPage }.collect { page ->
+            tabs.getOrNull(page)?.let { uiPrefs.edit().putString(LAST_TAB, it.name).apply() }
+        }
+    }
     val scope = rememberCoroutineScope()
 
     val results = remember(songs, query) {
@@ -357,11 +371,13 @@ private fun TabBar(
                     val accent = colors.primary
                     val lineHeight = 2.5.dp.toPx()
                     val lineTop = spot.bottom + 5.dp.toPx()
-                    // The light leaves the line and fans out as it rises: its left side
-                    // leans like a backslash, its right like a slash, gone halfway up the word.
+                    // The line is a little shorter than the name; its light fans out as it rises
+                    // (left side like a backslash, right like a slash) and stops exactly at the
+                    // name's edges, gone halfway up the word.
                     val glowTop = spot.top + (spot.bottom - spot.top) * 0.5f
-                    val height = lineTop - glowTop
-                    val spread = height * 0.9f
+                    val spread = (spot.right - spot.left) * 0.14f
+                    val lineLeft = spot.left + spread
+                    val lineRight = spot.right - spread
                     val layers = 6
                     val brush = Brush.verticalGradient(
                         0f to Color.Transparent,
@@ -374,18 +390,18 @@ private fun TabBar(
                     repeat(layers) { k ->
                         val inset = spread * k / layers
                         val beam = Path().apply {
-                            moveTo(spot.left, lineTop)
-                            lineTo(spot.left - spread + inset, glowTop)
-                            lineTo(spot.right + spread - inset, glowTop)
-                            lineTo(spot.right, lineTop)
+                            moveTo(lineLeft, lineTop)
+                            lineTo(spot.left + inset, glowTop)
+                            lineTo(spot.right - inset, glowTop)
+                            lineTo(lineRight, lineTop)
                             close()
                         }
                         drawPath(beam, brush)
                     }
                     drawRoundRect(
                         color = accent,
-                        topLeft = Offset(spot.left, lineTop),
-                        size = Size(spot.right - spot.left, lineHeight),
+                        topLeft = Offset(lineLeft, lineTop),
+                        size = Size(lineRight - lineLeft, lineHeight),
                         cornerRadius = CornerRadius(lineHeight / 2),
                     )
                 },
@@ -716,3 +732,5 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
         modifier = Modifier.widthIn(min = 180.dp),
     )
 }
+
+private const val LAST_TAB = "last_tab"

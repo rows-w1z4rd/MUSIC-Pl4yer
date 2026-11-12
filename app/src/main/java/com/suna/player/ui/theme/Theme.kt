@@ -109,6 +109,8 @@ fun AccentHue.on(light: Boolean): Color = when (this) {
     AccentHue.RED -> if (light) Color(0xFFDC2626) else Color(0xFFFF5A5F)
     AccentHue.ORANGE -> if (light) Color(0xFFEA580C) else Color(0xFFFF9F43)
     AccentHue.GOLD -> if (light) Color(0xFFB45309) else Color(0xFFFFD43B)
+    // Reads best on White and bright wallpapers; on dark themes it gives black buttons with white icons.
+    AccentHue.BLACK -> Color.Black
 }
 
 /** The theme's backdrop when there is no wallpaper: flat, or with a glow fading in from the top. */
