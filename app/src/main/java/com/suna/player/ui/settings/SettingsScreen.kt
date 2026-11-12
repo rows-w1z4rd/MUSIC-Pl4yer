@@ -1,9 +1,11 @@
 package com.suna.player.ui.settings
 
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Brush
+import com.suna.player.ui.theme.on
+import com.suna.player.data.AccentHue
 import com.suna.player.ui.theme.LocalWallpaperTones
 import com.suna.player.ui.theme.LocalIsLight
-import com.suna.player.data.ThemeMode
-import androidx.compose.material.icons.rounded.Contrast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -84,7 +86,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -105,7 +106,6 @@ import com.suna.player.data.SettingsStore
 import com.suna.player.data.WallpaperStore
 import com.suna.player.ui.common.LocalMiniPlayerSpace
 import com.suna.player.ui.common.cardColor
-import com.suna.player.ui.theme.AccentChoices
 import com.suna.player.ui.theme.colors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -113,7 +113,6 @@ import kotlin.math.roundToInt
 /** The settings pages. The main list opens each detail page in place. */
 private enum class Page(val title: String) {
     MAIN("Settings"),
-    MODE("Light and dark"),
     THEME("Theme"),
     ACCENT("Accent color"),
     WALLPAPER("Wallpaper"),
@@ -152,7 +151,6 @@ fun SettingsScreen(
         ) {
             when (shown) {
                 Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save) { page = it }
-                Page.MODE -> ModePage(appearance, save)
                 Page.THEME -> ThemePage(appearance, wallpaper != null, save)
                 Page.ACCENT -> AccentPage(appearance, save)
                 Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onAdjustWallpaper)
@@ -377,15 +375,18 @@ private fun MainPage(
             .getOrNull() ?: "?"
     }
 
-    Group("Appearance") {
-        SettingRow(Icons.Rounded.Contrast, Grey, "Light and dark", appearance.mode.label, onClick = { open(Page.MODE) })
-        RowDivider()
+    Group(
+        "Appearance",
+        footer = "The theme is the background and overall look. The accent is the highlight " +
+            "color on top of it: buttons, the progress bar, the heart and the selected tab.",
+    ) {
         SettingRow(Icons.Rounded.Palette, Indigo, "Theme", appearance.palette.label, onClick = { open(Page.THEME) })
         RowDivider()
         SettingRow(
             Icons.Rounded.ColorLens,
             Pink,
             "Accent color",
+            appearance.accent?.label ?: "Theme default",
             onClick = { open(Page.ACCENT) },
             trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -445,35 +446,6 @@ private fun MainPage(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Light and dark
-// ---------------------------------------------------------------------------------------------
-
-@Composable
-private fun ModePage(appearance: Appearance, save: Save) {
-    Group(
-        footer = "Automatic matches your wallpaper: a bright picture gets the light version, a dark " +
-            "one the dark version. Without a wallpaper it follows your phone's dark mode.",
-    ) {
-        ThemeMode.entries.forEachIndexed { index, mode ->
-            SettingRow(
-                icon = null,
-                tint = Color.Transparent,
-                title = mode.label,
-                onClick = { save { setThemeMode(mode) } },
-                trailing = {
-                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                        if (appearance.mode == mode) {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                },
-            )
-            if (index < ThemeMode.entries.lastIndex) RowDivider(start = 14)
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
 // Theme
 // ---------------------------------------------------------------------------------------------
 
@@ -495,9 +467,13 @@ private fun ThemePage(appearance: Appearance, hasWallpaper: Boolean, save: Save)
             }
         }
         Text(
-            "Every theme has a light version and a dark version on true black, so the screen's " +
-                "unlit pixels stay off. From wallpaper takes its colors from your picture. " +
-                "Catppuccin, Nord, Gruvbox, Rosé Pine and Tokyo Night are open-source color schemes.",
+            if (hasWallpaper) {
+                "Black keeps unlit pixels off on your OLED screen. From wallpaper takes its colors " +
+                    "from your picture, and goes light or dark to match it."
+            } else {
+                "Black keeps unlit pixels off on your OLED screen. Set a wallpaper to get a theme " +
+                    "made from its colors."
+            },
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -510,13 +486,13 @@ private fun ThemePage(appearance: Appearance, hasWallpaper: Boolean, save: Save)
 @Composable
 private fun ThemeCard(palette: Palette, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val c = palette.colors(LocalIsLight.current, LocalWallpaperTones.current)
-    val background = c?.background ?: scheme.background
-    val panel = c?.panel ?: scheme.surfaceContainerLow
-    val raised = c?.raised ?: scheme.surfaceContainerHigh
-    val text = c?.text ?: scheme.onSurface
-    val subtext = c?.subtext ?: scheme.onSurfaceVariant
-    val accent = c?.accent ?: scheme.primary
+    val c = palette.colors(LocalWallpaperTones.current)
+    val background = c.background
+    val panel = c.panel
+    val raised = c.raised
+    val text = c.text
+    val subtext = c.subtext
+    val accent = c.accent
     val shape = RoundedCornerShape(18.dp)
 
     Column(modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick)) {
@@ -527,6 +503,13 @@ private fun ThemeCard(palette: Palette, selected: Boolean, modifier: Modifier, o
                 .aspectRatio(0.95f)
                 .clip(shape)
                 .background(background)
+                .then(
+                    if (c.glow != null) {
+                        Modifier.background(Brush.verticalGradient(0f to c.glow, 0.6f to background))
+                    } else {
+                        Modifier
+                    },
+                )
                 .border(if (selected) 2.5.dp else 1.dp, if (selected) scheme.primary else scheme.outlineVariant, shape)
                 .padding(10.dp),
         ) {
@@ -598,10 +581,13 @@ private fun ThemeCard(palette: Palette, selected: Boolean, modifier: Modifier, o
 
 @Composable
 private fun AccentPage(appearance: Appearance, save: Save) {
-    val themeAccent = appearance.palette.colors(LocalIsLight.current, LocalWallpaperTones.current)?.accent
-        ?: MaterialTheme.colorScheme.primary
+    val light = LocalIsLight.current
+    val themeAccent = appearance.palette.colors(LocalWallpaperTones.current).accent
 
-    Group(footer = "Used for buttons, progress bars and the selected tab.") {
+    Group(
+        footer = "The accent is the highlight color: buttons, the progress bar, the heart and the " +
+            "selected tab. Each color is shaded to suit your theme.",
+    ) {
         SettingRow(
             icon = null,
             tint = Color.Transparent,
@@ -621,29 +607,47 @@ private fun AccentPage(appearance: Appearance, save: Save) {
     }
 
     Column(Modifier.padding(horizontal = 16.dp)) {
-        AccentChoices.chunked(5).forEach { row ->
+        AccentHue.entries.chunked(5).forEach { row ->
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             ) {
-                row.forEach { color ->
-                    val selected = appearance.accent == color.toArgb()
-                    Box(
-                        contentAlignment = Alignment.Center,
+                row.forEach { hue ->
+                    val color = hue.on(light)
+                    val selected = appearance.accent == hue
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .size(54.dp)
-                            .border(2.5.dp, if (selected) color else Color.Transparent, CircleShape)
-                            .padding(6.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .clickable { save { setAccent(color.toArgb()) } },
+                            .width(60.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { save { setAccent(hue) } }
+                            .padding(vertical = 4.dp),
                     ) {
-                        if (selected) {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = Color(0xFF101014))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(50.dp)
+                                .border(2.5.dp, if (selected) color else Color.Transparent, CircleShape)
+                                .padding(5.dp)
+                                .clip(CircleShape)
+                                .background(color),
+                        ) {
+                            if (selected) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = "Selected",
+                                    tint = if (color.luminance() > 0.45f) Color(0xFF101014) else Color.White,
+                                )
+                            }
                         }
+                        Text(
+                            hue.label,
+                            fontSize = 12.sp,
+                            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
-                repeat(5 - row.size) { Spacer(Modifier.size(54.dp)) }
             }
         }
     }
@@ -738,7 +742,7 @@ private fun WallpaperPage(
                 onClick = {
                     scope.launch {
                         settings.setWallpaper(false)
-                        if (appearance.palette == Palette.WALLPAPER) settings.setPalette(Palette.OLED)
+                        if (appearance.palette == Palette.WALLPAPER) settings.setPalette(Palette.BLUE)
                         wallpapers.clear()
                     }
                 },

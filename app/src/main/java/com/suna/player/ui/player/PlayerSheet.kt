@@ -148,7 +148,7 @@ private fun stageColors(): StageColors =
     if (LocalIsLight.current) {
         StageColors(MaterialTheme.colorScheme.background, Color(0xFF1C1C1E), Color(0xFF6E6E73))
     } else {
-        StageColors(Color.Black, Color(0xFFF5F5F7), Color(0xFF9A9AA0))
+        StageColors(MaterialTheme.colorScheme.background, Color(0xFFF5F5F7), Color(0xFF9A9AA0))
     }
 
 suspend fun Animatable<Float, AnimationVector1D>.expand() = animateTo(1f, SettleSpec)

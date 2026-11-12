@@ -15,28 +15,32 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /**
- * Color themes. Each has a dark version on pure black and a light version. Most are
- * well-known palettes from the Linux desktop world.
- * (OLED is the plain blue-accented one; the name is kept so saved settings still match.)
+ * The theme: the background and overall look. Blue is the default; Black keeps unlit pixels
+ * off on an OLED screen; From wallpaper takes its colors from the picture.
  */
 enum class Palette(val label: String) {
-    OLED("Mono"),
+    BLUE("Blue"),
+    BLACK("Black"),
+    GREEN("Green"),
+    WHITE("White"),
     WALLPAPER("From wallpaper"),
-    PHOSPHOR("Phosphor"),
-    MOCHA("Catppuccin Mocha"),
-    NORD("Nord"),
-    GRUVBOX("Gruvbox"),
-    ROSE_PINE("Rosé Pine"),
-    TOKYO_NIGHT("Tokyo Night"),
-    GRAPHITE("Graphite"),
-    SYSTEM("Phone colors"),
 }
 
-/** Light or dark. Automatic follows the wallpaper's brightness, or the phone without one. */
-enum class ThemeMode(val label: String) {
-    AUTO("Automatic"),
-    LIGHT("Light"),
-    DARK("Dark"),
+/**
+ * The accent: the highlight color on top of the theme (buttons, progress bar, heart, selected
+ * tab). Each is drawn in a shade that suits the theme, brighter on dark and deeper on white.
+ */
+enum class AccentHue(val label: String) {
+    MONO("Mono"),
+    BLUE("Blue"),
+    SKY("Sky"),
+    GREEN("Green"),
+    MINT("Mint"),
+    PURPLE("Purple"),
+    PINK("Pink"),
+    RED("Red"),
+    ORANGE("Orange"),
+    GOLD("Gold"),
 }
 
 /** Pages that can be shown in the library, in the user's chosen order. */
@@ -54,10 +58,9 @@ enum class LibraryTab(val label: String) {
 val DefaultTabs = listOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.PLAYLISTS)
 
 data class Appearance(
-    val palette: Palette = Palette.OLED,
-    val mode: ThemeMode = ThemeMode.AUTO,
-    /** ARGB accent color, or null to use the palette's own accent. */
-    val accent: Int? = null,
+    val palette: Palette = Palette.BLUE,
+    /** Null uses the theme's own accent. */
+    val accent: AccentHue? = null,
     /** Text shown at the top of the library; empty shows nothing. */
     val headerText: String = "",
     val tabs: List<LibraryTab> = DefaultTabs,
@@ -81,10 +84,8 @@ class SettingsStore(private val context: Context) {
 
     val appearance: Flow<Appearance> = context.dataStore.data.map { p ->
         Appearance(
-            palette = p[PALETTE]?.let { name -> Palette.entries.find { it.name == name } }
-                ?: Palette.OLED,
-            mode = p[MODE]?.let { name -> ThemeMode.entries.find { it.name == name } } ?: ThemeMode.AUTO,
-            accent = p[ACCENT],
+            palette = p[PALETTE]?.let(::parsePalette) ?: Palette.BLUE,
+            accent = p[ACCENT_HUE]?.let { name -> AccentHue.entries.find { it.name == name } },
             headerText = p[HEADER] ?: "",
             tabs = p[TABS]?.let(::parseTabs) ?: DefaultTabs,
             hasWallpaper = p[HAS_WALLPAPER] ?: false,
@@ -101,20 +102,23 @@ class SettingsStore(private val context: Context) {
     val skipSilence: Flow<Boolean> =
         context.dataStore.data.map { it[SKIP_SILENCE] ?: false }.distinctUntilChanged()
 
-    suspend fun setThemeMode(mode: ThemeMode) {
-        context.dataStore.edit { it[MODE] = mode.name }
-    }
-
     suspend fun setPalette(palette: Palette) {
         context.dataStore.edit {
             it[PALETTE] = palette.name
-            it.remove(ACCENT) // each palette starts with its own accent
+            it.remove(ACCENT_HUE) // each theme starts with its own accent
         }
     }
 
-    suspend fun setAccent(argb: Int?) {
-        context.dataStore.edit { if (argb == null) it.remove(ACCENT) else it[ACCENT] = argb }
+    suspend fun setAccent(hue: AccentHue?) {
+        context.dataStore.edit {
+            it.remove(OLD_ACCENT)
+            if (hue == null) it.remove(ACCENT_HUE) else it[ACCENT_HUE] = hue.name
+        }
     }
+
+    /** Themes from older versions map onto today's set. */
+    private fun parsePalette(name: String): Palette =
+        Palette.entries.find { it.name == name } ?: if (name == "OLED") Palette.BLACK else Palette.BLUE
 
     suspend fun setHeaderText(text: String) {
         context.dataStore.edit { it[HEADER] = text.take(40) }
@@ -178,8 +182,8 @@ class SettingsStore(private val context: Context) {
         const val MAX_WALLPAPER_SCALE = 4f
 
         private val PALETTE = stringPreferencesKey("palette")
-        private val MODE = stringPreferencesKey("theme_mode")
-        private val ACCENT = intPreferencesKey("accent")
+        private val OLD_ACCENT = intPreferencesKey("accent")
+        private val ACCENT_HUE = stringPreferencesKey("accent_hue")
         private val HEADER = stringPreferencesKey("header_text")
         private val TABS = stringPreferencesKey("tabs")
         private val HAS_WALLPAPER = booleanPreferencesKey("has_wallpaper")
