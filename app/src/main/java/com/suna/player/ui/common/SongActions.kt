@@ -108,7 +108,7 @@ fun BoxScope.SelectionTopBar(selection: SongSelection) {
                 Icon(Icons.Rounded.Close, contentDescription = "Stop selecting")
             }
             Text(
-                if (selection.count == 0) "Select songs" else "${selection.count} selected",
+                if (selection.count == 0) "Select tracks" else "${selection.count} selected",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).padding(start = 4.dp),

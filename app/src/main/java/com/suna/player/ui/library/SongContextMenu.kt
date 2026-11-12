@@ -145,7 +145,7 @@ fun SongContextMenu(
                     Line()
                     Item("Go to album", Icons.Rounded.Album) { close(onOpenAlbum) }
                     Line()
-                    Item("Song details", Icons.Rounded.Info) { close(onShowDetails) }
+                    Item("Track details", Icons.Rounded.Info) { close(onShowDetails) }
                     Line()
                     Item("Share", Icons.Rounded.Share) { close(onShare) }
                     Gap()

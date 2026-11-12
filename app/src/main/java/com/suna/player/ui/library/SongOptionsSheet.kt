@@ -146,7 +146,7 @@ fun SongOptionsSheet(
                 Divider()
                 Option(Icons.Rounded.Person, "Go to artist", then(onOpenArtist))
                 Divider()
-                Option(Icons.Rounded.Info, "Song details", then(onShowDetails))
+                Option(Icons.Rounded.Info, "Track details", then(onShowDetails))
                 Divider()
                 Option(
                     Icons.Rounded.TravelExplore,

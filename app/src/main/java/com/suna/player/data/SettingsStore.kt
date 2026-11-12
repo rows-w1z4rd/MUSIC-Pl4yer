@@ -46,7 +46,7 @@ enum class AccentHue(val label: String) {
 
 /** Pages that can be shown in the library, in the user's chosen order. */
 enum class LibraryTab(val label: String) {
-    SONGS("Songs"),
+    SONGS("Tracks"),
     FAVORITES("Favorites"),
     ALBUMS("Albums"),
     ARTISTS("Artists"),

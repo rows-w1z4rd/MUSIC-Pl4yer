@@ -108,7 +108,7 @@ fun DeletePlaylistDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> U
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delete playlist?") },
-        text = { Text("\"$name\" will be deleted. The songs themselves stay on your phone.") },
+        text = { Text("\"$name\" will be deleted. The tracks themselves stay on your phone.") },
         confirmButton = {
             TextButton(onClick = {
                 onConfirm()

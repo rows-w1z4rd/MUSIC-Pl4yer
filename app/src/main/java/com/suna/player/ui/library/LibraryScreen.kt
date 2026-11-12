@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.snapshotFlow
 import android.content.Context
@@ -236,7 +237,7 @@ fun LibraryScreen(
                     value = query,
                     onValueChange = { query = it },
                     singleLine = true,
-                    placeholder = { Text("Search songs, artists, albums") },
+                    placeholder = { Text("Search tracks, artists, albums") },
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.weight(1f).padding(start = 4.dp),
@@ -409,12 +410,14 @@ private fun TabBar(
             tabs.forEachIndexed { index, tab ->
                 val active = index == selected
                 val lit by animateFloatAsState(if (active) 1f else 0f, tween(220), label = "tabText")
+                // The active name is a touch larger and bright; its neighbors smaller and dimmer.
                 Text(
                     text = tab.label,
                     style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = lerp(13f, 15f, lit).sp,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                     ),
-                    color = lerp(colors.onSurfaceVariant, colors.onSurface, lit),
+                    color = lerp(colors.onSurfaceVariant.copy(alpha = 0.7f), colors.onSurface, lit),
                     modifier = Modifier
                         .onPlaced { coords ->
                             val at = coords.positionInParent()
@@ -562,7 +565,7 @@ private fun FavoritesPage(
         favorites.mapNotNull { byId[it] }
     }
     if (list.isEmpty()) {
-        EmptyMessage("Tap the heart on a song to keep it here")
+        EmptyMessage("Tap the heart on a track to keep it here")
         return
     }
     SongList(
@@ -602,7 +605,7 @@ private fun StatsPage(
         }
     }
     if (list.isEmpty()) {
-        EmptyMessage("Songs you play will show up here")
+        EmptyMessage("Tracks you play will show up here")
         return
     }
     val now = remember(plays) { System.currentTimeMillis() }

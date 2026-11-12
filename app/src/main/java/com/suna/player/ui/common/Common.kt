@@ -342,7 +342,7 @@ fun EmptyMessage(text: String) {
     }
 }
 
-fun songCount(n: Int) = if (n == 1) "1 song" else "$n songs"
+fun songCount(n: Int) = if (n == 1) "1 track" else "$n tracks"
 
 fun formatTime(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)

@@ -37,7 +37,7 @@ fun SongListScreen(
         ScreenTopBar(title = title, subtitle = songCount(songs.size), onBack = onBack, actions = actions)
         Panel(Modifier.weight(1f).padding(bottom = 0.dp)) {
             if (songs.isEmpty()) {
-                EmptyMessage("No songs")
+                EmptyMessage("No tracks")
             } else {
                 SongList(
                     songs = songs,

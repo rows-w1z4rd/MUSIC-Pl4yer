@@ -73,7 +73,7 @@ fun SongDetailsSheet(song: Song, plays: SongPlays?, onDismiss: () -> Unit) {
             )
             Text(song.artist, fontSize = 15.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
 
-            Group("Song") {
+            Group("Track") {
                 Fact("Album", song.album.ifBlank { "Unknown album" })
                 Fact("Artist", song.artist)
                 Fact("Length", formatTime(song.durationMs))
