@@ -1,4 +1,5 @@
-# MU51C
+<p align="center"><img src="docs/icon.png" width="120" alt="MU51C app icon" /></p>
+<h1 align="center">MU51C</h1>
 
 **An offline music player for Android.** It plays the music already on your phone, with no account, no
 internet permission and no tracking.
