@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -58,25 +59,29 @@ private fun DrawScope.line(color: Color, path: Path, width: Float = 1.8f) {
 }
 
 /**
- * Shuffle: two arrows crossing. When shuffle is off they cross less and a slash is drawn
- * through them; turning it on swings them fully across and wipes the slash away.
+ * Shuffle: two arrows crossing. When shuffle is off a slash is drawn through them; turning it
+ * on wipes the slash away with a small pop.
  */
 @Composable
 fun ShuffleGlyph(on: Boolean, tint: Color, modifier: Modifier = Modifier) {
-    val cross by animateFloatAsState(
-        targetValue = if (on) 1f else 0.55f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
-        label = "shuffleCross",
-    )
     val slash by animateFloatAsState(
         targetValue = if (on) 0f else 1f,
         animationSpec = tween(220),
         label = "shuffleSlash",
     )
-    Canvas(modifier.size(26.dp)) {
+    val pop by animateFloatAsState(
+        targetValue = if (on) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium),
+        label = "shufflePop",
+    )
+    Canvas(modifier.size(26.dp).graphicsLayer {
+        val s = 1f + 0.6f * pop * (1f - pop)
+        scaleX = s
+        scaleY = s
+    }) {
         inGrid {
-            val aEnd = lerp(16.5f, 7f, cross)
-            val bEnd = lerp(7.5f, 17f, cross)
+            val aEnd = 7f
+            val bEnd = 17f
             val a = Path().apply {
                 moveTo(3.5f, 17f)
                 lineTo(6.5f, 17f)
