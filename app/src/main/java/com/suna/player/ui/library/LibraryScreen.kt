@@ -1,5 +1,10 @@
 package com.suna.player.ui.library
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,7 +43,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -103,6 +108,7 @@ fun LibraryScreen(
     onOpenPlaylist: (Long) -> Unit,
     onNewPlaylist: () -> Unit,
     onOpenSettings: () -> Unit,
+    onStartSelection: () -> Unit,
 ) {
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -137,8 +143,31 @@ fun LibraryScreen(
                 contentDescription = if (searching) "Close search" else "Search",
             )
         }
-        IconButton(onClick = onOpenSettings) {
-            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+        Box {
+            var menuOpen by remember { mutableStateOf(false) }
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
+            }
+            val onSongPage = searching ||
+                tabs.getOrNull(pager.currentPage) in setOf(LibraryTab.SONGS, LibraryTab.MOST_PLAYED, LibraryTab.RECENT)
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                offset = DpOffset(x = 0.dp, y = 4.dp),
+            ) {
+                if (onSongPage) {
+                    MenuItem("Select") {
+                        menuOpen = false
+                        onStartSelection()
+                    }
+                }
+                MenuItem("Settings") {
+                    menuOpen = false
+                    onOpenSettings()
+                }
+            }
         }
     }
 
@@ -512,4 +541,14 @@ private fun PlaylistList(
         }
         item(key = "end") { Spacer(Modifier.height(4.dp)) }
     }
+}
+
+@Composable
+private fun MenuItem(label: String, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, style = MaterialTheme.typography.bodyLarge) },
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp),
+        modifier = Modifier.widthIn(min = 180.dp),
+    )
 }

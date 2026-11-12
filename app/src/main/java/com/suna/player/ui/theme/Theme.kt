@@ -167,7 +167,10 @@ fun AppBackground(
     appearance: Appearance?,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // Behind a wallpaper the base is true black: any space the picture doesn't cover stays dark
+    // on an OLED screen instead of showing the theme's grey.
+    val base = if (wallpaper != null) Color.Black else MaterialTheme.colorScheme.background
+    Box(Modifier.fillMaxSize().background(base)) {
         if (wallpaper != null && appearance != null) {
             WallpaperImage(
                 wallpaper = wallpaper,
@@ -189,7 +192,7 @@ fun AppBackground(
     }
 }
 
-/** The wallpaper filling the screen, then zoomed and shifted; uncovered space shows the background. */
+/** The wallpaper filling the screen, then zoomed and shifted; uncovered space shows black. */
 @Composable
 fun WallpaperImage(wallpaper: ImageBitmap, scale: Float, x: Float, y: Float) {
     Image(

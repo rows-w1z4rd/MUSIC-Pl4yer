@@ -51,7 +51,8 @@ fun WallpaperEditor(
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            // Space the picture doesn't cover is true black, so it's simply off on OLED.
+            .background(Color.Black)
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     scale = (scale * zoom).coerceIn(

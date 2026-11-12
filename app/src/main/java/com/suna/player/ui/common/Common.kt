@@ -8,6 +8,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -26,13 +27,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -172,14 +176,27 @@ fun SongRow(
     modifier: Modifier = Modifier,
     /** Small note on the right, such as a play count. */
     info: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    /** Null when not picking songs; otherwise whether this one is picked. */
+    selected: Boolean? = null,
 ) {
+    val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .background(if (selected == true) colors.primary.copy(alpha = 0.12f) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 14.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
     ) {
+        if (selected != null) {
+            Icon(
+                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (selected) "Selected" else "Not selected",
+                tint = if (selected) colors.primary else colors.onSurfaceVariant,
+                modifier = Modifier.padding(end = 14.dp).size(24.dp),
+            )
+        }
         Artwork(albumArtUri(song.albumId), Modifier.size(48.dp))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
             Text(
@@ -191,27 +208,37 @@ fun SongRow(
             Text(
                 song.artist,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         if (info != null) {
-            Text(info, style = SmallLabel, color = MaterialTheme.colorScheme.primary)
-        }
-        IconButton(onClick = onPlayNext) {
-            Icon(
-                Icons.AutoMirrored.Rounded.PlaylistAdd,
-                contentDescription = "Play ${song.title} next",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(
+                info,
+                style = SmallLabel,
+                color = colors.primary,
+                modifier = Modifier.padding(end = if (selected != null) 12.dp else 0.dp),
             )
         }
-        IconButton(onClick = onOptions) {
-            Icon(
-                Icons.Rounded.MoreVert,
-                contentDescription = "Options for ${song.title}",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        if (selected == null) {
+            IconButton(onClick = onPlayNext) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.PlaylistAdd,
+                    contentDescription = "Play ${song.title} next",
+                    tint = colors.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onOptions) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = "Options for ${song.title}",
+                    tint = colors.onSurfaceVariant,
+                )
+            }
+        } else {
+            // Keeps rows the same height as when the buttons are showing.
+            Box(Modifier.size(48.dp))
         }
     }
 }
@@ -227,15 +254,23 @@ fun SongList(
     info: ((Song) -> String?)? = null,
     header: (@Composable () -> Unit)? = null,
 ) {
+    val selection = LocalSongSelection.current
+    val selecting = selection?.active == true
+    if (selecting) SideEffect { selection.adopt(songs) }
+
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (header != null) item(key = "header") { header() }
         itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
             SongRow(
                 song = song,
-                onClick = { onPlay(index) },
+                onClick = { if (selecting) selection.toggle(song) else onPlay(index) },
                 onPlayNext = { onPlayNext(song) },
                 onOptions = { onOptions(song) },
                 info = info?.invoke(song),
+                onLongClick = selection?.let { s ->
+                    { if (s.active) s.toggle(song) else s.start(songs, song) }
+                },
+                selected = if (selecting) song.id in selection.ids else null,
             )
         }
     }

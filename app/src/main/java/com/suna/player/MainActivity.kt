@@ -50,6 +50,12 @@ import androidx.navigation.navArgument
 import com.suna.player.data.Appearance
 import com.suna.player.data.Song
 import com.suna.player.ui.common.LocalMiniPlayerSpace
+import com.suna.player.ui.common.shareSongs
+import com.suna.player.ui.common.rememberDeleteSongs
+import com.suna.player.ui.common.SelectionTopBar
+import com.suna.player.ui.common.SelectionBottomBar
+import com.suna.player.ui.common.SongSelection
+import com.suna.player.ui.common.LocalSongSelection
 import com.suna.player.ui.library.AddToPlaylistDialog
 import com.suna.player.ui.library.DeletePlaylistDialog
 import com.suna.player.ui.library.LibraryScreen
@@ -124,8 +130,8 @@ private object Routes {
 /** Which song the options sheet is open for, and from which playlist (if any). */
 private data class OptionsTarget(val song: Song, val playlistId: Long?)
 
-/** A pending "new playlist" name prompt, optionally with a song to put in it. */
-private data class NewPlaylistRequest(val song: Song?)
+/** A pending "new playlist" name prompt, with any songs to put in it. */
+private data class NewPlaylistRequest(val songs: List<Song>)
 
 @Composable
 private fun AppRoot(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap?) {
@@ -150,6 +156,7 @@ private fun AppRoot(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap
 
 @Composable
 private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap?) {
+    val context = LocalContext.current
     val player = app.player
     val songs by app.library.songs.collectAsStateWithLifecycle()
     val loaded by app.library.loaded.collectAsStateWithLifecycle()
@@ -165,13 +172,15 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val scope = rememberCoroutineScope()
 
     var optionsFor by remember { mutableStateOf<OptionsTarget?>(null) }
-    var addToPlaylist by remember { mutableStateOf<Song?>(null) }
+    var addToPlaylist by remember { mutableStateOf<List<Song>?>(null) }
     var newPlaylist by remember { mutableStateOf<NewPlaylistRequest?>(null) }
 
     // 0 = the player is a bar at the bottom, 1 = it fills the screen.
     val expansion = remember { Animatable(0f) }
     val current = playerState.current
-    val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER
+    val selection = remember { SongSelection() }
+    val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER && !selection.active
+    val deleteSongs = rememberDeleteSongs(onDeleted = selection::clear)
     val playNext: (Song) -> Unit = { player.playNext(listOf(it)) }
     val openSongOptions: (Song) -> Unit = { optionsFor = OptionsTarget(it, playlistId = null) }
 
@@ -180,10 +189,14 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
         scope.launch { expansion.collapse() }
     }
     LaunchedEffect(showPlayer) { if (!showPlayer) expansion.snapTo(0f) }
+    // Picking songs ends with Back, or when leaving the page it started on.
+    BackHandler(enabled = selection.active) { selection.clear() }
+    LaunchedEffect(route) { selection.clear() }
 
     Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
-            LocalMiniPlayerSpace provides if (showPlayer) MiniPlayerSpace else 0.dp,
+            LocalMiniPlayerSpace provides if (showPlayer || selection.active) MiniPlayerSpace else 0.dp,
+            LocalSongSelection provides selection,
         ) {
             NavHost(
                 navController = nav,
@@ -206,8 +219,9 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                         onOpenArtist = { nav.navigate("artist/$it") },
                         onOpenFolder = { nav.navigate("folder/${Uri.encode(it)}") },
                         onOpenPlaylist = { nav.navigate("playlist/$it") },
-                        onNewPlaylist = { newPlaylist = NewPlaylistRequest(song = null) },
+                        onNewPlaylist = { newPlaylist = NewPlaylistRequest(emptyList()) },
                         onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+                        onStartSelection = selection::startEmpty,
                     )
                 }
                 composable(
@@ -322,6 +336,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     SettingsScreen(
                         appearance = appearance,
                         skipSilence = skipSilence,
+                        wallpaper = wallpaper,
                         settings = app.settings,
                         wallpapers = app.wallpapers,
                         onBack = { nav.popBackStack() },
@@ -352,9 +367,20 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 },
                 onAddToPlaylist = current.mediaId.toLongOrNull()
                     ?.let { songsById[it] }
-                    ?.let { song -> { addToPlaylist = song } },
+                    ?.let { song -> { addToPlaylist = listOf(song) } },
             )
         }
+
+        SelectionTopBar(selection)
+        SelectionBottomBar(
+            selection = selection,
+            onPlay = {
+                player.play(it, 0)
+                selection.clear()
+            },
+            onAdd = { addToPlaylist = it },
+            onDelete = deleteSongs,
+        )
     }
 
     optionsFor?.let { target ->
@@ -364,7 +390,11 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             song = song,
             onPlayNext = { player.playNext(listOf(song)) },
             onAddToQueue = { player.addToQueue(listOf(song)) },
-            onAddToPlaylist = { addToPlaylist = song },
+            onAddToPlaylist = { addToPlaylist = listOf(song) },
+            onOpenAlbum = { nav.navigate("album/${song.albumId}") },
+            onOpenArtist = { nav.navigate("artist/${song.artistId}") },
+            onShare = { shareSongs(context, listOf(song)) },
+            onDelete = { deleteSongs(listOf(song)) },
             onRemoveFromPlaylist = if (playlistId != null) {
                 { app.playlists.removeSong(playlistId, song.id) }
             } else {
@@ -374,13 +404,16 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
         )
     }
 
-    addToPlaylist?.let { song ->
+    addToPlaylist?.let { picked ->
         AddToPlaylistDialog(
             playlists = playlists,
-            onPick = { app.playlists.addSong(it, song.id) },
+            onPick = { id ->
+                picked.forEach { app.playlists.addSong(id, it.id) }
+                selection.clear()
+            },
             onNew = {
                 addToPlaylist = null
-                newPlaylist = NewPlaylistRequest(song)
+                newPlaylist = NewPlaylistRequest(picked)
             },
             onDismiss = { addToPlaylist = null },
         )
@@ -392,7 +425,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             initialName = "",
             confirmLabel = "Create",
             onConfirm = { name ->
-                app.playlists.create(name, listOfNotNull(request.song?.id))
+                app.playlists.create(name, request.songs.map { it.id })
+                selection.clear()
             },
             onDismiss = { newPlaylist = null },
         )

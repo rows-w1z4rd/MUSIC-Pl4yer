@@ -6,20 +6,26 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,49 +43,63 @@ fun SongOptionsSheet(
     onAddToPlaylist: () -> Unit,
     /** Set only when the sheet was opened from inside a playlist. */
     onRemoveFromPlaylist: (() -> Unit)?,
+    onOpenAlbum: () -> Unit,
+    onOpenArtist: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
             ListItem(
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                leadingContent = { Artwork(albumArtUri(song.albumId), Modifier.size(48.dp)) },
+                leadingContent = { Artwork(albumArtUri(song.albumId), Modifier.size(52.dp)) },
                 headlineContent = {
-                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        song.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 },
                 supportingContent = {
-                    Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${song.artist} · ${song.album}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
             )
-            HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-            Option(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") {
-                onPlayNext()
+            HorizontalDivider(
+                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+
+            fun then(action: () -> Unit): () -> Unit = {
+                action()
                 onDismiss()
             }
-            Option(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue") {
-                onAddToQueue()
-                onDismiss()
-            }
-            Option(Icons.Filled.Add, "Add to playlist") {
-                onAddToPlaylist()
-                onDismiss()
-            }
+            Option(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next", then(onPlayNext))
+            Option(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue", then(onAddToQueue))
+            Option(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist", then(onAddToPlaylist))
             if (onRemoveFromPlaylist != null) {
-                Option(Icons.Filled.Close, "Remove from this playlist") {
-                    onRemoveFromPlaylist()
-                    onDismiss()
-                }
+                Option(Icons.Rounded.RemoveCircleOutline, "Remove from this playlist", then(onRemoveFromPlaylist))
             }
+            Option(Icons.Rounded.Album, "Go to album", then(onOpenAlbum))
+            Option(Icons.Rounded.Person, "Go to artist", then(onOpenArtist))
+            Option(Icons.Rounded.Share, "Share", then(onShare))
+            Option(Icons.Rounded.Delete, "Delete from phone", then(onDelete), MaterialTheme.colorScheme.error)
         }
     }
 }
 
 @Composable
-private fun Option(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun Option(icon: ImageVector, label: String, onClick: () -> Unit, tint: Color = Color.Unspecified) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        leadingContent = { Icon(icon, contentDescription = null) },
-        headlineContent = { Text(label) },
+        leadingContent = {
+            Icon(icon, contentDescription = null, tint = if (tint.isSpecified) tint else MaterialTheme.colorScheme.onSurfaceVariant)
+        },
+        headlineContent = { Text(label, color = if (tint.isSpecified) tint else Color.Unspecified) },
     )
 }
