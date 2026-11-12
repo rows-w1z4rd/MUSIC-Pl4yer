@@ -3,8 +3,10 @@ package com.suna.player.playback
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionCommand
 import android.os.Bundle
+import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -12,6 +14,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -90,6 +93,17 @@ class PlaybackService : MediaSessionService() {
         scope.launch {
             app.settings.audioOffload.collect { setAudioOffload(it) }
         }
+        scope.launch {
+            app.settings.endlessPlay.collect { on ->
+                endless = on
+                if (on) topUpQueue()
+            }
+        }
+        // Endless play picks from the library, which may not be loaded if the app's screen
+        // was never opened in this run (for example, play was pressed on the widget).
+        if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            app.library.start()
+        }
 
         restoreQueue()
     }
@@ -146,6 +160,53 @@ class PlaybackService : MediaSessionService() {
         store.savePosition(player.currentMediaItemIndex, player.currentPosition.coerceAtLeast(0))
     }
 
+    // --- Endless play ---
+
+    private var endless = true
+
+    /**
+     * When the last track of the queue starts and nothing repeats, adds a batch of library
+     * tracks that aren't already in the queue, so playback carries on by itself. Returns true
+     * if tracks were added.
+     */
+    private fun topUpQueue(): Boolean {
+        if (!endless || !restoreDone) return false
+        if (player.mediaItemCount == 0 || player.hasNextMediaItem()) return false
+        if (player.repeatMode != Player.REPEAT_MODE_OFF || repeatsLeft > 0) return false
+        val library = app.library.songs.value
+        if (library.isEmpty()) return false
+        val inQueue = HashSet<String>(player.mediaItemCount)
+        for (i in 0 until player.mediaItemCount) inQueue += player.getMediaItemAt(i).mediaId
+        // Prefer tracks not heard in this queue; with a small library, allow repeats again.
+        val fresh = library.filter { it.id.toString() !in inQueue }.ifEmpty { library }
+        val batch = fresh.shuffled().take(ENDLESS_BATCH).map { song ->
+            song.toMediaItem().let { it.buildUpon().setUri(it.playableUri()).build() }
+        }
+        // In shuffle mode the player would scatter new tracks through the whole shuffle order,
+        // mostly before the current one, where they'd never play. Keep the order as it was and
+        // put the (already random) batch after it instead.
+        val order = if (player.shuffleModeEnabled) shuffleSequence() else null
+        val start = player.mediaItemCount
+        player.addMediaItems(batch)
+        if (order != null) {
+            val indices = (order + (start until start + batch.size)).toIntArray()
+            player.setShuffleOrder(DefaultShuffleOrder(indices, System.nanoTime()))
+        }
+        return true
+    }
+
+    /** Queue positions in the order shuffle mode plays them. */
+    private fun shuffleSequence(): List<Int> {
+        val timeline = player.currentTimeline
+        val out = ArrayList<Int>(timeline.windowCount)
+        var i = timeline.getFirstWindowIndex(true)
+        while (i != C.INDEX_UNSET) {
+            out += i
+            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true)
+        }
+        return out
+    }
+
     /** Counts a play for the statistics and the "most played" page. */
     private fun recordPlay(item: MediaItem, listenedMs: Long) {
         val songId = item.mediaId.toLongOrNull() ?: return
@@ -193,6 +254,10 @@ class PlaybackService : MediaSessionService() {
                 updateWidget()
             }
             if (!restoreDone) return
+            // Topping up while the last track plays keeps the change of track gapless.
+            if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_REPEAT_MODE_CHANGED)) {
+                topUpQueue()
+            }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) saveQueue()
             if (events.contains(Player.EVENT_REPEAT_MODE_CHANGED)) {
                 if (changingRepeat) {
@@ -245,6 +310,12 @@ class PlaybackService : MediaSessionService() {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
                 player.currentMediaItem?.let { recordPlay(it, player.duration.coerceAtLeast(0)) }
+                // Normally the queue was topped up earlier; this catches a queue that reached
+                // its end some other way (for example, endless play was just switched on).
+                if (topUpQueue() && player.hasNextMediaItem()) {
+                    player.seekToNextMediaItem()
+                    player.play()
+                }
             }
         }
 
@@ -367,5 +438,6 @@ class PlaybackService : MediaSessionService() {
         const val EXTRA_REPEATS_LEFT = "repeats_left"
 
         const val MIN_COUNTED_MS = 30_000L
+        const val ENDLESS_BATCH = 20
     }
 }

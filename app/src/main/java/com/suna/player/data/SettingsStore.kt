@@ -172,6 +172,14 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[SKIP_SILENCE] = on }
     }
 
+    /** When the queue runs out, more tracks from the library are added so music never stops. */
+    val endlessPlay: Flow<Boolean> =
+        context.dataStore.data.map { it[ENDLESS_PLAY] ?: true }.distinctUntilChanged()
+
+    suspend fun setEndlessPlay(on: Boolean) {
+        context.dataStore.edit { it[ENDLESS_PLAY] = on }
+    }
+
     private fun parseTabs(raw: String): List<LibraryTab>? =
         raw.split(',')
             .mapNotNull { name -> LibraryTab.entries.find { it.name == name } }
@@ -196,5 +204,6 @@ class SettingsStore(private val context: Context) {
         private val WP_Y = floatPreferencesKey("wallpaper_y")
         private val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
         private val AUDIO_OFFLOAD = booleanPreferencesKey("audio_offload")
+        private val ENDLESS_PLAY = booleanPreferencesKey("endless_play")
     }
 }

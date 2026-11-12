@@ -50,6 +50,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ColorLens
@@ -354,6 +355,7 @@ private val Orange = Color(0xFFFF9F0A)
 private val Green = Color(0xFF30D158)
 private val Teal = Color(0xFF40C8E0)
 private val Red = Color(0xFFFF453A)
+private val Purple = Color(0xFFBF5AF2)
 
 // ---------------------------------------------------------------------------------------------
 // Main list
@@ -369,6 +371,7 @@ private fun MainPage(
     open: (Page) -> Unit,
 ) {
     val offload by settings.audioOffload.collectAsStateWithLifecycle(initialValue = false)
+    val endless by settings.endlessPlay.collectAsStateWithLifecycle(initialValue = true)
     val context = LocalContext.current
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
@@ -425,9 +428,14 @@ private fun MainPage(
 
     Group(
         "Playback",
-        footer = "Battery saver lets the phone's audio chip play music while the screen is off. " +
-            "Turn it off if you hear skips or stutters.",
+        footer = "Endless play adds more tracks from your library when the queue runs out, " +
+            "so the music doesn't stop. Battery saver lets the phone's audio chip play music " +
+            "while the screen is off. Turn it off if you hear skips or stutters.",
     ) {
+        SettingRow(Icons.Rounded.AllInclusive, Purple, "Endless play", trailing = {
+            Toggle(endless) { on -> save { setEndlessPlay(on) } }
+        })
+        RowDivider()
         SettingRow(Icons.Rounded.BatterySaver, Green, "Battery saver", trailing = {
             Toggle(offload) { on -> save { setAudioOffload(on) } }
         })
