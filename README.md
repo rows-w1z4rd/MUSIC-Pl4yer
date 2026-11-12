@@ -21,14 +21,19 @@ screen widget, and play counts kept on the device.
 ## What it does
 
 - **Library** of tracks, albums, artists, folders, playlists, favorites, most played and recently played. Pick
-  the tabs you want, in your order, and swipe between them.
+  the tabs you want, in your order, and swipe between them. It reopens on the tab and sort order you left it on,
+  newest tracks first by default.
 - **Swipe-up player**: the glass bar at the bottom follows your finger up into the full player and back down.
   The queue opens in place of the artwork.
+- **Endless play**: when the queue runs out, more tracks from your library follow, so the music never stops on a
+  long drive. It works with shuffle too, and can be turned off.
 - **Hold gestures**: hold play to hear the track up to three more times; hold next or back to skip through it.
 - **Track menus**: a long press lifts the track and opens a quick menu; the ⋯ button opens the full one, with
   track details and a search on Google or YouTube.
 - **Pick several tracks** to play, add to a playlist, share or delete them at once.
 - **Themes**: Blue, Black, Green, White, or colors taken from your own wallpaper, with an accent color on top.
+- **Wallpaper preview**: a picked picture opens behind the real library before anything is saved. Zoom out to
+  the whole picture, fill the edges with black or a blurred copy of it, set the blur and dim, then Set or Cancel.
 - **Long-press hints**: hold any icon button to see what it does or which mode it's in.
 - **Home screen widget** with the cover, the song and play controls.
 - **Battery first**: nothing runs in the background unless music is playing, and the widget never polls.
@@ -36,13 +41,14 @@ screen widget, and play counts kept on the device.
 ## Screens
 
 <p align="center">
-  <img src="docs/screenshots/04-queue.webp" width="32%" alt="Queue inside the player" />
-  <img src="docs/screenshots/05-settings.webp" width="32%" alt="Settings" />
-  <img src="docs/screenshots/06-wallpaper.webp" width="32%" alt="Library over a wallpaper, with its colors" />
+  <img src="docs/screenshots/04-queue.webp" width="24%" alt="Queue inside the player" />
+  <img src="docs/screenshots/05-settings.webp" width="24%" alt="Settings" />
+  <img src="docs/screenshots/06-wallpaper.webp" width="24%" alt="Library over a wallpaper, with its colors" />
+  <img src="docs/screenshots/07-wallpaper-preview.webp" width="24%" alt="Wallpaper preview with blurred edges" />
 </p>
 
-<sub>Wallpaper in the last screenshot: Edward Burne-Jones, <i>The Beguiling of Merlin</i> (1874), public domain,
-via Wikimedia Commons. The tracks are generated demo files.</sub>
+<sub>Wallpaper in the last two screenshots: Edward Burne-Jones, <i>The Beguiling of Merlin</i> (1874), public
+domain, via Wikimedia Commons. The tracks are generated demo files.</sub>
 
 ---
 
@@ -58,7 +64,7 @@ app/src/main/java/com/suna/player/
 └── ui/
     ├── library/         tabs, song lists, menus, song details
     ├── player/          mini bar, full player, queue
-    ├── settings/        settings pages, wallpaper editor
+    ├── settings/        settings pages, wallpaper preview
     ├── common/          shared rows, selection, actions
     └── theme/           themes, accents, wallpaper colors
 ```
