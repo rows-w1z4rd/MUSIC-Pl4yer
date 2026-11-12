@@ -86,3 +86,18 @@ class StatsStore(db: SunaDb) {
             .map { rows -> rows.associateBy { it.songId } }
             .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 }
+
+/** Hearted songs. */
+class FavoritesStore(db: SunaDb) {
+    private val dao = db.favorites()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+
+    /** Song ids, newest first. */
+    val ids: StateFlow<List<Long>> = dao.all().stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    fun set(songId: Long, favorite: Boolean) = scope.launch {
+        if (favorite) dao.add(songId) else dao.remove(songId)
+    }
+
+    fun toggle(songId: Long) = set(songId, songId !in ids.value)
+}

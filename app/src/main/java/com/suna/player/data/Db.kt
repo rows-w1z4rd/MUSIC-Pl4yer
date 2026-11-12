@@ -1,6 +1,7 @@
 package com.suna.player.data
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -47,6 +48,26 @@ data class PlayEventEntity(
     val playedAt: Long,
     val listenedMs: Long,
 )
+
+/** A song the user hearted. */
+@Entity(tableName = "favorites")
+data class FavoriteEntity(
+    @PrimaryKey val songId: Long,
+    val addedAt: Long,
+)
+
+@Dao
+interface FavoritesDao {
+    /** Newest first, like a "liked songs" list. */
+    @Query("SELECT songId FROM favorites ORDER BY addedAt DESC")
+    fun all(): Flow<List<Long>>
+
+    @Query("INSERT OR IGNORE INTO favorites (songId, addedAt) VALUES (:songId, :at)")
+    suspend fun add(songId: Long, at: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM favorites WHERE songId = :songId")
+    suspend fun remove(songId: Long)
+}
 
 data class PlaylistSongRow(val playlistId: Long, val songId: Long)
 
@@ -134,12 +155,15 @@ interface StatsDao {
         PlaylistSongEntity::class,
         PlayStatEntity::class,
         PlayEventEntity::class,
+        FavoriteEntity::class,
     ],
-    version = 1,
+    version = 2,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 abstract class SunaDb : RoomDatabase() {
     abstract fun playlists(): PlaylistDao
     abstract fun stats(): StatsDao
+    abstract fun favorites(): FavoritesDao
 
     companion object {
         fun open(context: Context): SunaDb =

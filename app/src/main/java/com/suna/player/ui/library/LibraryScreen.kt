@@ -97,6 +97,7 @@ fun LibraryScreen(
     headerText: String,
     tabs: List<LibraryTab>,
     plays: Map<Long, SongPlays>,
+    favorites: List<Long>,
     playlists: List<Playlist>,
     onPlay: (list: List<Song>, index: Int) -> Unit,
     onShuffle: (list: List<Song>) -> Unit,
@@ -149,7 +150,7 @@ fun LibraryScreen(
                 Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
             }
             val onSongPage = searching ||
-                tabs.getOrNull(pager.currentPage) in setOf(LibraryTab.SONGS, LibraryTab.MOST_PLAYED, LibraryTab.RECENT)
+                tabs.getOrNull(pager.currentPage) in setOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.MOST_PLAYED, LibraryTab.RECENT)
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
@@ -237,6 +238,9 @@ fun LibraryScreen(
                     when (tabs.getOrNull(page)) {
                         LibraryTab.SONGS -> SongsPage(
                             songs, plays, onPlay, onShuffle, onPlayNext, onSongOptions, listPadding,
+                        )
+                        LibraryTab.FAVORITES -> FavoritesPage(
+                            songs, favorites, onPlay, onShuffle, onPlayNext, onSongOptions, listPadding,
                         )
                         LibraryTab.ALBUMS -> AlbumGrid(songs, onOpenAlbum, bottomSpace)
                         LibraryTab.ARTISTS -> ArtistList(songs, onOpenArtist, listPadding)
@@ -361,7 +365,7 @@ fun ListToolbar(
             }
         }
         Text(
-            "$count",
+            if (label == null) songCount(count) else "$count",
             style = SmallLabel,
             color = colors.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.padding(start = 6.dp),
@@ -401,6 +405,43 @@ fun SquareButton(
             content = content,
         )
     }
+}
+
+/** Hearted songs, newest first. */
+@Composable
+private fun FavoritesPage(
+    songs: List<Song>,
+    favorites: List<Long>,
+    onPlay: (List<Song>, Int) -> Unit,
+    onShuffle: (List<Song>) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onSongOptions: (Song) -> Unit,
+    padding: PaddingValues,
+) {
+    val list = remember(songs, favorites) {
+        val byId = songs.associateBy { it.id }
+        favorites.mapNotNull { byId[it] }
+    }
+    if (list.isEmpty()) {
+        EmptyMessage("Tap the heart on a song to keep it here")
+        return
+    }
+    SongList(
+        songs = list,
+        onPlay = { onPlay(list, it) },
+        onPlayNext = onPlayNext,
+        onOptions = onSongOptions,
+        contentPadding = padding,
+        header = {
+            ListToolbar(
+                label = null,
+                count = list.size,
+                onLabel = null,
+                onShuffle = { onShuffle(list) },
+                onPlayAll = { onPlay(list, 0) },
+            )
+        },
+    )
 }
 
 @Composable

@@ -162,6 +162,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val loaded by app.library.loaded.collectAsStateWithLifecycle()
     val playlists by app.playlists.playlists.collectAsStateWithLifecycle()
     val plays by app.stats.plays.collectAsStateWithLifecycle()
+    val favorites by app.favorites.ids.collectAsStateWithLifecycle()
+    val favoriteSet = remember(favorites) { favorites.toHashSet() }
     val skipSilence by app.settings.skipSilence.collectAsStateWithLifecycle(initialValue = false)
     val playerState by player.state.collectAsStateWithLifecycle()
     val songsById = remember(songs) { songs.associateBy { it.id } }
@@ -210,6 +212,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                         headerText = appearance.headerText,
                         tabs = appearance.tabs,
                         plays = plays,
+                        favorites = favorites,
                         playlists = playlists,
                         onPlay = { list, index -> player.play(list, index) },
                         onShuffle = { player.shuffleAll(it) },
@@ -368,6 +371,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 onAddToPlaylist = current.mediaId.toLongOrNull()
                     ?.let { songsById[it] }
                     ?.let { song -> { addToPlaylist = listOf(song) } },
+                isFavorite = current?.mediaId?.toLongOrNull() in favoriteSet,
+                onToggleFavorite = current?.mediaId?.toLongOrNull()?.let { id -> { app.favorites.toggle(id) } },
             )
         }
 
@@ -388,6 +393,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
         val playlistId = target.playlistId
         SongOptionsSheet(
             song = song,
+            isFavorite = song.id in favoriteSet,
+            onToggleFavorite = { app.favorites.toggle(song.id) },
             onPlayNext = { player.playNext(listOf(song)) },
             onAddToQueue = { player.addToQueue(listOf(song)) },
             onAddToPlaylist = { addToPlaylist = listOf(song) },

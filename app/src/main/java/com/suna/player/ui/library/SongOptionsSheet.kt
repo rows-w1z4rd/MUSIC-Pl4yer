@@ -11,6 +11,8 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Share
@@ -38,6 +40,8 @@ import com.suna.player.ui.common.Artwork
 @Composable
 fun SongOptionsSheet(
     song: Song,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onAddToPlaylist: () -> Unit,
@@ -77,6 +81,11 @@ fun SongOptionsSheet(
             fun then(action: () -> Unit): () -> Unit = {
                 action()
                 onDismiss()
+            }
+            if (isFavorite) {
+                Option(Icons.Rounded.Favorite, "Remove from favorites", then(onToggleFavorite), MaterialTheme.colorScheme.primary)
+            } else {
+                Option(Icons.Rounded.FavoriteBorder, "Add to favorites", then(onToggleFavorite))
             }
             Option(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next", then(onPlayNext))
             Option(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue", then(onAddToQueue))

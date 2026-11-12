@@ -14,9 +14,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-/** Color themes. Most are well-known palettes from the Linux desktop world. */
+/**
+ * Color themes, all on pure black. Most are well-known palettes from the Linux desktop world.
+ * (OLED is the plain grey one; the name is kept so saved settings still match.)
+ */
 enum class Palette(val label: String) {
-    OLED("OLED"),
+    OLED("Mono"),
     PHOSPHOR("Phosphor"),
     MOCHA("Catppuccin Mocha"),
     NORD("Nord"),
@@ -24,13 +27,13 @@ enum class Palette(val label: String) {
     ROSE_PINE("Rosé Pine"),
     TOKYO_NIGHT("Tokyo Night"),
     GRAPHITE("Graphite"),
-    LATTE("Catppuccin Latte"),
     SYSTEM("Phone colors"),
 }
 
 /** Pages that can be shown in the library, in the user's chosen order. */
 enum class LibraryTab(val label: String) {
     SONGS("Songs"),
+    FAVORITES("Favorites"),
     ALBUMS("Albums"),
     ARTISTS("Artists"),
     PLAYLISTS("Playlists"),
@@ -39,7 +42,7 @@ enum class LibraryTab(val label: String) {
     RECENT("Recently played"),
 }
 
-val DefaultTabs = listOf(LibraryTab.SONGS, LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.PLAYLISTS)
+val DefaultTabs = listOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.PLAYLISTS)
 
 data class Appearance(
     val palette: Palette = Palette.OLED,

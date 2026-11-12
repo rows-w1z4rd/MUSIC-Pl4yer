@@ -442,7 +442,6 @@ private fun MainPage(
 
 @Composable
 private fun ThemePage(appearance: Appearance, save: Save) {
-    val lightWithWallpaper = appearance.hasWallpaper && appearance.palette.colors()?.dark == false
     Column(Modifier.padding(horizontal = 16.dp)) {
         Palette.entries.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 16.dp)) {
@@ -458,11 +457,8 @@ private fun ThemePage(appearance: Appearance, save: Save) {
             }
         }
         Text(
-            if (lightWithWallpaper) {
-                "Light themes switch to black while a wallpaper is set, so text stays readable."
-            } else {
-                "Catppuccin, Nord, Gruvbox, Rosé Pine and Tokyo Night are open-source color schemes."
-            },
+            "Every theme keeps a true black background, so the screen's unlit pixels stay off. " +
+                "Catppuccin, Nord, Gruvbox, Rosé Pine and Tokyo Night are open-source color schemes.",
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

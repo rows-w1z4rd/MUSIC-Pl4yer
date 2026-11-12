@@ -41,6 +41,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -164,6 +166,8 @@ fun PlayerSheet(
     expansion: Animatable<Float, AnimationVector1D>,
     onOpenQueue: () -> Unit,
     onAddToPlaylist: (() -> Unit)?,
+    isFavorite: Boolean,
+    onToggleFavorite: (() -> Unit)?,
 ) {
     val current = state.current ?: return
     val scope = rememberCoroutineScope()
@@ -271,6 +275,8 @@ fun PlayerSheet(
                     onCollapse = { scope.launch { expansion.collapse() } },
                     onOpenQueue = onOpenQueue,
                     onAddToPlaylist = onAddToPlaylist,
+                    isFavorite = isFavorite,
+                    onToggleFavorite = onToggleFavorite,
                 )
             }
             if (showMini) {
@@ -495,6 +501,8 @@ private fun FullPlayer(
     onCollapse: () -> Unit,
     onOpenQueue: () -> Unit,
     onAddToPlaylist: (() -> Unit)?,
+    isFavorite: Boolean,
+    onToggleFavorite: (() -> Unit)?,
 ) {
     var scrub by remember { mutableStateOf<Float?>(null) }
     val position = rememberPosition(player, active = true, key = current.mediaId)
@@ -544,6 +552,26 @@ private fun FullPlayer(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 2.dp),
                         )
+                    }
+                    if (onToggleFavorite != null) {
+                        // A small pop when hearted, then it settles.
+                        val pop by animateFloatAsState(
+                            targetValue = if (isFavorite) 1f else 0f,
+                            animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium),
+                            label = "heart",
+                        )
+                        IconButton(onClick = onToggleFavorite) {
+                            Icon(
+                                if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                tint = if (isFavorite) MaterialTheme.colorScheme.primary else TextBright,
+                                modifier = Modifier.graphicsLayer {
+                                    val s = 1f + 0.72f * pop * (1f - pop)
+                                    scaleX = s
+                                    scaleY = s
+                                },
+                            )
+                        }
                     }
                     if (onAddToPlaylist != null) {
                         IconButton(onClick = onAddToPlaylist) {

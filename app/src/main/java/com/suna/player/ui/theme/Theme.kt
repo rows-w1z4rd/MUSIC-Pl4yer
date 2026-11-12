@@ -14,7 +14,6 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -74,7 +74,23 @@ class PaletteColors(
     val dark: Boolean = true,
 )
 
-fun Palette.colors(): PaletteColors? = when (this) {
+/**
+ * Every theme sits on pure black, so unlit pixels stay off on an OLED screen. A theme's own
+ * shades only tint the panels and buttons, toned down to sit quietly on the black.
+ */
+fun Palette.colors(): PaletteColors? = baseColors()?.onBlack()
+
+private fun PaletteColors.onBlack() = PaletteColors(
+    background = Color.Black,
+    panel = lerp(Color.Black, panel, 0.55f),
+    raised = lerp(Color.Black, raised, 0.8f),
+    border = lerp(Color.Black, border, 0.8f),
+    text = text,
+    subtext = subtext,
+    accent = accent,
+)
+
+private fun Palette.baseColors(): PaletteColors? = when (this) {
     Palette.OLED -> PaletteColors(
         background = Color(0xFF000000), panel = Color(0xFF0C0C0E), raised = Color(0xFF18181C),
         border = Color(0xFF232329), text = Color(0xFFE4E4E8), subtext = Color(0xFF8B8B95),
@@ -115,11 +131,6 @@ fun Palette.colors(): PaletteColors? = when (this) {
         border = Color(0xFF303030), text = Color(0xFFDCDDDE), subtext = Color(0xFF999999),
         accent = Color(0xFF8A7CF5),
     )
-    Palette.LATTE -> PaletteColors(
-        background = Color(0xFFDCE0E8), panel = Color(0xFFEFF1F5), raised = Color(0xFFE6E9EF),
-        border = Color(0xFFCCD0DA), text = Color(0xFF4C4F69), subtext = Color(0xFF6C6F85),
-        accent = Color(0xFF8839EF), dark = false,
-    )
     Palette.SYSTEM -> null // built from the phone's Material You colors
 }
 
@@ -131,13 +142,9 @@ fun Palette.colors(): PaletteColors? = when (this) {
 fun SunaTheme(appearance: Appearance?, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val hasWallpaper = appearance?.hasWallpaper == true
-    var palette = appearance?.palette ?: Palette.OLED
-    if (hasWallpaper && palette.colors()?.dark == false) palette = Palette.OLED
+    val palette = appearance?.palette ?: Palette.OLED
 
-    var colors: ColorScheme = palette.colors()?.toScheme() ?: run {
-        val dark = hasWallpaper || isSystemInDarkTheme()
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    }
+    var colors: ColorScheme = palette.colors()?.toScheme() ?: dynamicDarkColorScheme(context).onBlack()
     appearance?.accent?.let { colors = colors.withAccent(Color(it)) }
     val dark = colors.background.luminance() < 0.5f
 
@@ -246,6 +253,19 @@ private fun PaletteColors.toScheme(): ColorScheme {
         inverseOnSurface = background,
     )
 }
+
+/** The phone's Material You colors, moved onto pure black like every other theme. */
+private fun ColorScheme.onBlack(): ColorScheme = copy(
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceDim = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = lerp(Color.Black, surfaceContainerLow, 0.55f),
+    surfaceContainer = lerp(Color.Black, surfaceContainer, 0.6f),
+    surfaceContainerHigh = lerp(Color.Black, surfaceContainerHigh, 0.8f),
+    surfaceContainerHighest = lerp(Color.Black, surfaceContainerHighest, 0.85f),
+    outlineVariant = lerp(Color.Black, outlineVariant, 0.6f),
+)
 
 private fun ColorScheme.withAccent(accent: Color): ColorScheme {
     val onAccent = if (accent.luminance() > 0.45f) Color(0xFF101014) else Color.White
