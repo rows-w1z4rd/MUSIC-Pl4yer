@@ -22,19 +22,37 @@ class WallpaperStore(private val context: Context) {
 
     private val file = File(context.filesDir, "wallpaper.jpg")
 
-    /** Copies the picked image into the app's storage. Returns false if it could not be read. */
-    suspend fun import(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+    /** A newly picked picture waiting in the preview; it replaces [file] only when set. */
+    private val draft = File(context.filesDir, "wallpaper_draft.jpg")
+
+    /**
+     * Copies the picked image (whole, only shrunk) into the app's storage as a draft for the
+     * preview. Returns false if it could not be read.
+     */
+    suspend fun importDraft(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
             val bitmap = decode(source, FULL_SIDE)
             val tmp = File(context.filesDir, "wallpaper.tmp")
             tmp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
             bitmap.recycle()
-            file.delete()
-            tmp.renameTo(file)
+            draft.delete()
+            tmp.renameTo(draft)
         } catch (_: Exception) {
             false
         }
+    }
+
+    /** Makes the draft the wallpaper. Returns false if there was no draft. */
+    suspend fun commitDraft(): Boolean = withContext(Dispatchers.IO) {
+        if (!draft.exists()) return@withContext false
+        file.delete()
+        draft.renameTo(file)
+    }
+
+    suspend fun discardDraft() = withContext(Dispatchers.IO) {
+        draft.delete()
+        Unit
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
@@ -42,8 +60,12 @@ class WallpaperStore(private val context: Context) {
         Unit
     }
 
-    /** The picture to draw behind the app for a blur setting between 0 and 1. */
-    suspend fun render(blur: Float): ImageBitmap? = withContext(Dispatchers.Default) {
+    /**
+     * The picture to draw behind the app for a blur setting between 0 and 1: the wallpaper,
+     * or the draft waiting in the preview.
+     */
+    suspend fun render(blur: Float, fromDraft: Boolean = false): ImageBitmap? = withContext(Dispatchers.Default) {
+        val file = if (fromDraft) draft else file
         if (!file.exists()) return@withContext null
         try {
             val source = ImageDecoder.createSource(file)

@@ -25,6 +25,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.max
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.compositeOver
@@ -197,21 +203,30 @@ fun AppBackground(
     }
 }
 
-/** The wallpaper filling the screen, then zoomed and shifted; uncovered space shows black. */
+/**
+ * The wallpaper filling the screen at scale 1, then zoomed and shifted; uncovered space shows
+ * the background. The whole picture is drawn and only the result is clipped, so zooming out
+ * brings back the parts that filling the screen cut off.
+ */
 @Composable
-fun WallpaperImage(wallpaper: ImageBitmap, scale: Float, x: Float, y: Float) {
-    Image(
-        bitmap = wallpaper,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier
+fun WallpaperImage(wallpaper: ImageBitmap, scale: Float, x: Float, y: Float, modifier: Modifier = Modifier) {
+    Box(
+        modifier
             .fillMaxSize()
             .clipToBounds()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = x * size.width
-                translationY = y * size.height
+            .drawBehind {
+                val fill = max(size.width / wallpaper.width, size.height / wallpaper.height) * scale
+                val w = wallpaper.width * fill
+                val h = wallpaper.height * fill
+                drawImage(
+                    image = wallpaper,
+                    dstOffset = IntOffset(
+                        ((size.width - w) / 2 + x * size.width).roundToInt(),
+                        ((size.height - h) / 2 + y * size.height).roundToInt(),
+                    ),
+                    dstSize = IntSize(w.roundToInt(), h.roundToInt()),
+                    filterQuality = FilterQuality.Medium,
+                )
             },
     )
 }

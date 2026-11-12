@@ -6,6 +6,7 @@ import com.suna.player.ui.theme.on
 import com.suna.player.data.AccentHue
 import com.suna.player.ui.theme.LocalWallpaperTones
 import com.suna.player.ui.theme.LocalIsLight
+import com.suna.player.ui.theme.WallpaperImage
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -129,7 +130,7 @@ fun SettingsScreen(
     settings: SettingsStore,
     wallpapers: WallpaperStore,
     onBack: () -> Unit,
-    onAdjustWallpaper: () -> Unit,
+    onWallpaperPreview: (newPicture: Boolean) -> Unit,
 ) {
     var page by rememberSaveable { mutableStateOf(Page.MAIN) }
     BackHandler(enabled = page != Page.MAIN) { page = Page.MAIN }
@@ -154,7 +155,7 @@ fun SettingsScreen(
                 Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save) { page = it }
                 Page.THEME -> ThemePage(appearance, wallpaper != null, save)
                 Page.ACCENT -> AccentPage(appearance, save)
-                Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onAdjustWallpaper)
+                Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onWallpaperPreview)
                 Page.HEADER -> HeaderPage(appearance, save)
                 Page.TABS -> TabsPage(appearance.tabs) { tabs -> save { setTabs(tabs) } }
             }
@@ -672,23 +673,21 @@ private fun WallpaperPage(
     wallpaper: ImageBitmap?,
     settings: SettingsStore,
     wallpapers: WallpaperStore,
-    onAdjust: () -> Unit,
+    onPreview: (newPicture: Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var importFailed by remember { mutableStateOf(false) }
+    // A picked picture opens in the preview first; nothing changes until it is set there.
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             scope.launch {
-                val ok = wallpapers.import(uri)
+                val ok = wallpapers.importDraft(uri)
                 importFailed = !ok
-                if (ok) {
-                    settings.setWallpaper(true)
-                    // The app takes on the picture's colors; any other theme is a tap away.
-                    settings.setPalette(Palette.WALLPAPER)
-                }
+                if (ok) onPreview(true)
             }
         }
     }
+    val onAdjust = { onPreview(false) }
     val choose = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
     // A phone-shaped preview of the wallpaper as it sits behind the app.
@@ -704,19 +703,7 @@ private fun WallpaperPage(
                 .clickable(onClick = if (wallpaper != null) onAdjust else choose),
         ) {
             if (wallpaper != null) {
-                Image(
-                    wallpaper,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = appearance.wallpaperScale
-                            scaleY = appearance.wallpaperScale
-                            translationX = appearance.wallpaperX * size.width
-                            translationY = appearance.wallpaperY * size.height
-                        },
-                )
+                WallpaperImage(wallpaper, appearance.wallpaperScale, appearance.wallpaperX, appearance.wallpaperY)
                 val veil = if (LocalIsLight.current) Color.White else Color.Black
                 Box(Modifier.fillMaxSize().background(veil.copy(alpha = appearance.dim)))
             } else {

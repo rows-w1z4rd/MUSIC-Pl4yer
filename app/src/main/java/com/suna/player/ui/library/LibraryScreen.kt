@@ -314,7 +314,7 @@ private data class TabSpot(val left: Float, val right: Float, val top: Float, va
  * An accent line under the name sends light up and outward, like a stage light.
  */
 @Composable
-private fun TabBar(
+internal fun TabBar(
     tabs: List<LibraryTab>,
     selected: Int,
     /** The pager's position, including how far a swipe has got: 1.5 is halfway to tab 2. */

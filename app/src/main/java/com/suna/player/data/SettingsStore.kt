@@ -141,6 +141,26 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /**
+     * Saves everything chosen in the wallpaper preview in one go, so the app redraws once.
+     * A new picture also switches to its colors, as picking one always did.
+     */
+    suspend fun applyWallpaper(newPicture: Boolean, scale: Float, x: Float, y: Float, blur: Float, dim: Float) {
+        context.dataStore.edit {
+            it[HAS_WALLPAPER] = true
+            if (newPicture) {
+                it[WALLPAPER_STAMP] = System.currentTimeMillis()
+                it[PALETTE] = Palette.WALLPAPER.name
+                it.remove(ACCENT_HUE)
+            }
+            it[WP_SCALE] = scale.coerceIn(MIN_WALLPAPER_SCALE, MAX_WALLPAPER_SCALE)
+            it[WP_X] = x.coerceIn(-1f, 1f)
+            it[WP_Y] = y.coerceIn(-1f, 1f)
+            it[BLUR] = blur.coerceIn(0f, 1f)
+            it[DIM] = dim.coerceIn(0f, 0.9f)
+        }
+    }
+
     suspend fun setWallpaperPlacement(scale: Float, x: Float, y: Float) {
         context.dataStore.edit {
             it[WP_SCALE] = scale.coerceIn(MIN_WALLPAPER_SCALE, MAX_WALLPAPER_SCALE)

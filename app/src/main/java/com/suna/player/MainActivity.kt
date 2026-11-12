@@ -128,6 +128,7 @@ private object Routes {
     const val QUEUE = "queue"
     const val SETTINGS = "settings"
     const val WALLPAPER = "wallpaper"
+    const val WALLPAPER_NEW = "wallpaper/new"
     const val ALBUM = "album/{id}"
     const val ARTIST = "artist/{id}"
     const val PLAYLIST = "playlist/{id}"
@@ -196,7 +197,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val haze = rememberHazeState()
     val current = playerState.current
     val selection = remember { SongSelection() }
-    val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER && !selection.active
+    val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER &&
+        route != Routes.WALLPAPER_NEW && !selection.active
     val deleteSongs = rememberDeleteSongs(onDeleted = selection::clear)
     val playNext: (Song) -> Unit = { player.playNext(listOf(it)) }
     val openSongOptions: (Song) -> Unit = { optionsFor = OptionsTarget(it, playlistId = null) }
@@ -354,18 +356,29 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                         settings = app.settings,
                         wallpapers = app.wallpapers,
                         onBack = { nav.popBackStack() },
-                        onAdjustWallpaper = { nav.navigate(Routes.WALLPAPER) { launchSingleTop = true } },
+                        onWallpaperPreview = { newPicture ->
+                            nav.navigate(if (newPicture) Routes.WALLPAPER_NEW else Routes.WALLPAPER) {
+                                launchSingleTop = true
+                            }
+                        },
                     )
                 }
-                composable(Routes.WALLPAPER) {
-                    WallpaperEditor(
-                        wallpaper = wallpaper,
-                        appearance = appearance,
-                        onSave = { scale, x, y ->
-                            scope.launch { app.settings.setWallpaperPlacement(scale, x, y) }
-                        },
-                        onClose = { nav.popBackStack() },
-                    )
+                for (newPicture in listOf(false, true)) {
+                    composable(if (newPicture) Routes.WALLPAPER_NEW else Routes.WALLPAPER) {
+                        val songs by app.library.songs.collectAsStateWithLifecycle()
+                        WallpaperEditor(
+                            newPicture = newPicture,
+                            appearance = appearance,
+                            wallpapers = app.wallpapers,
+                            songs = songs,
+                            onApply = { scale, x, y, blur, dim ->
+                                if (!newPicture || app.wallpapers.commitDraft()) {
+                                    app.settings.applyWallpaper(newPicture, scale, x, y, blur, dim)
+                                }
+                            },
+                            onClose = { nav.popBackStack() },
+                        )
+                    }
                 }
             }
         }
