@@ -1,5 +1,8 @@
 package com.suna.player.ui.common
 
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
 import android.net.Uri
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -178,17 +181,20 @@ fun SongRow(
     modifier: Modifier = Modifier,
     /** Small note on the right, such as a play count. */
     info: String? = null,
-    onLongClick: (() -> Unit)? = null,
+    /** Gets where the row is on screen, so a menu can open next to it. */
+    onLongClick: ((Rect) -> Unit)? = null,
     /** Null when not picking songs; otherwise whether this one is picked. */
     selected: Boolean? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    val bounds = remember { arrayOf(Rect.Zero) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
+            .onGloballyPositioned { bounds[0] = it.boundsInWindow() }
             .background(if (selected == true) colors.primary.copy(alpha = 0.12f) else Color.Transparent)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick?.let { { it(bounds[0]) } })
             .padding(start = 14.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
     ) {
         if (selected != null) {
@@ -257,6 +263,7 @@ fun SongList(
     header: (@Composable () -> Unit)? = null,
 ) {
     val selection = LocalSongSelection.current
+    val longPress = LocalSongLongPress.current
     val selecting = selection?.active == true
     if (selecting) SideEffect { selection.adopt(songs) }
 
@@ -269,8 +276,12 @@ fun SongList(
                 onPlayNext = { onPlayNext(song) },
                 onOptions = { onOptions(song) },
                 info = info?.invoke(song),
-                onLongClick = selection?.let { s ->
-                    { if (s.active) s.toggle(song) else s.start(songs, song) }
+                onLongClick = { rect ->
+                    when {
+                        selecting -> selection.toggle(song)
+                        longPress != null -> longPress(song, songs, rect)
+                        else -> selection?.start(songs, song)
+                    }
                 },
                 selected = if (selecting) song.id in selection.ids else null,
             )

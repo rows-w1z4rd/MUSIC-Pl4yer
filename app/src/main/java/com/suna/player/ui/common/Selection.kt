@@ -1,5 +1,6 @@
 package com.suna.player.ui.common
 
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,3 +57,6 @@ class SongSelection {
 }
 
 val LocalSongSelection = staticCompositionLocalOf<SongSelection?> { null }
+
+/** What a long press on a song does: gets the song, its list, and the row's place on screen. */
+val LocalSongLongPress = staticCompositionLocalOf<((Song, List<Song>, Rect) -> Unit)?> { null }

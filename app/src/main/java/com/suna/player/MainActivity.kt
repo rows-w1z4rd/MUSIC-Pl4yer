@@ -1,5 +1,9 @@
 package com.suna.player
 
+import androidx.compose.ui.geometry.Rect
+import com.suna.player.ui.library.SongMenuTarget
+import com.suna.player.ui.library.SongContextMenu
+import com.suna.player.ui.common.LocalSongLongPress
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -177,6 +181,11 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     var optionsFor by remember { mutableStateOf<OptionsTarget?>(null) }
     var addToPlaylist by remember { mutableStateOf<List<Song>?>(null) }
     var detailsFor by remember { mutableStateOf<Song?>(null) }
+    var pressed by remember { mutableStateOf<SongMenuTarget?>(null) }
+    // Remembered, so handing it to every list doesn't make them all redraw.
+    val onLongPress: (Song, List<Song>, Rect) -> Unit = remember {
+        { song, list, rect -> pressed = SongMenuTarget(song, list, rect) }
+    }
     var newPlaylist by remember { mutableStateOf<NewPlaylistRequest?>(null) }
 
     // 0 = the player is a bar at the bottom, 1 = it fills the screen.
@@ -196,6 +205,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
         CompositionLocalProvider(
             LocalMiniPlayerSpace provides if (showPlayer || selection.active) MiniPlayerSpace else 0.dp,
             LocalSongSelection provides selection,
+            LocalSongLongPress provides onLongPress,
         ) {
             NavHost(
                 navController = nav,
@@ -377,6 +387,24 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     ?.let { song -> { optionsFor = OptionsTarget(song, playlistId = null) } },
                 isFavorite = current?.mediaId?.toLongOrNull() in favoriteSet,
                 onToggleFavorite = current?.mediaId?.toLongOrNull()?.let { id -> { app.favorites.toggle(id) } },
+            )
+        }
+
+        pressed?.let { target ->
+            val song = target.song
+            SongContextMenu(
+                target = target,
+                isFavorite = song.id in favoriteSet,
+                onPlayNext = { player.playNext(listOf(song)) },
+                onAddToQueue = { player.addToQueue(listOf(song)) },
+                onToggleFavorite = { app.favorites.toggle(song.id) },
+                onAddToPlaylist = { addToPlaylist = listOf(song) },
+                onOpenAlbum = { nav.navigate("album/${song.albumId}") },
+                onShowDetails = { detailsFor = song },
+                onShare = { shareSongs(context, listOf(song)) },
+                onSelect = { selection.start(target.list, song) },
+                onDelete = { deleteSongs(listOf(song)) },
+                onDismiss = { pressed = null },
             )
         }
 

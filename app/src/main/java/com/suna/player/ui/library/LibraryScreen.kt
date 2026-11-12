@@ -1,5 +1,11 @@
 package com.suna.player.ui.library
 
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.BlendMode
@@ -8,8 +14,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Size
@@ -209,36 +213,38 @@ fun LibraryScreen(
             }
         }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(
-                start = 8.dp,
-                end = 4.dp,
-                top = if (hasHeader) 4.dp else 10.dp,
-                bottom = 8.dp,
-            ),
-        ) {
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                if (searching) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        singleLine = true,
-                        placeholder = { Text("Search songs, artists, albums") },
-                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
-                    )
-                } else {
-                    TabBar(
-                        tabs = tabs,
-                        selected = pager.currentPage,
-                        position = { pager.currentPage + pager.currentPageOffsetFraction },
-                        onSelect = { scope.launch { pager.animateScrollToPage(it) } },
-                    )
+        if (searching) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = if (hasHeader) 4.dp else 10.dp, bottom = 8.dp),
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    placeholder = { Text("Search songs, artists, albums") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f).padding(start = 4.dp),
+                )
+                if (!hasHeader) icons()
+            }
+        } else {
+            // The tabs span the whole width so the active one sits in the middle of the
+            // screen; the buttons float on the right, where the tabs fade out.
+            Box(Modifier.fillMaxWidth().padding(top = if (hasHeader) 4.dp else 10.dp, bottom = 8.dp)) {
+                TabBar(
+                    tabs = tabs,
+                    selected = pager.currentPage,
+                    position = { pager.currentPage + pager.currentPageOffsetFraction },
+                    onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+                    endClearance = if (hasHeader) 0.dp else 100.dp,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                if (!hasHeader) {
+                    Row(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) { icons() }
                 }
             }
-            if (!hasHeader) icons()
         }
 
         Panel(Modifier.weight(1f)) {
@@ -280,13 +286,13 @@ fun LibraryScreen(
     }
 }
 
-/** Where a tab's name sits inside the tab bar, in pixels. */
+/** Where a tab's name sits inside the tab row, in pixels. */
 private data class TabSpot(val left: Float, val right: Float, val top: Float, val bottom: Float)
 
 /**
- * The library tabs. One accent line sits under the active tab's name and slides along with
- * the pages as you swipe. Light rises from it like a stage light on the floor: as wide as the
- * name, fading out halfway up the letters.
+ * The library tabs, Samsung-style: the active tab's name always sits in the middle and the
+ * row glides along with the pages as you swipe, its neighbors fading out at the sides.
+ * An accent line under the name sends light up and outward, like a stage light.
  */
 @Composable
 private fun TabBar(
@@ -295,106 +301,121 @@ private fun TabBar(
     /** The pager's position, including how far a swipe has got: 1.5 is halfway to tab 2. */
     position: () -> Float,
     onSelect: (Int) -> Unit,
+    /** Room kept clear on the right for the buttons floating there. */
+    endClearance: Dp,
+    modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     val density = LocalDensity.current
-    val scroll = rememberScrollState()
     val spots = remember(tabs) { mutableStateMapOf<Int, TabSpot>() }
+    var viewport by remember { mutableIntStateOf(0) }
     val padX = 14.dp
     val padTop = 8.dp
     val padBottom = 12.dp
 
-    // Keep the active tab in view.
-    LaunchedEffect(selected, spots[selected]) {
-        val spot = spots[selected] ?: return@LaunchedEffect
-        val margin = with(density) { 24.dp.toPx() }
-        val visibleEnd = scroll.value + scroll.viewportSize
-        if (spot.left - margin < scroll.value) {
-            scroll.animateScrollTo((spot.left - margin).toInt().coerceAtLeast(0))
-        } else if (spot.right + margin > visibleEnd) {
-            scroll.animateScrollTo((spot.right + margin - scroll.viewportSize).toInt())
-        }
+    // Where the row is, interpolated between tabs while a swipe is under way.
+    fun spotAt(pos: Float): TabSpot? {
+        val clamped = pos.coerceIn(0f, (tabs.size - 1).coerceAtLeast(0).toFloat())
+        val from = spots[clamped.toInt()] ?: return null
+        val to = spots[(clamped.toInt() + 1).coerceAtMost(tabs.lastIndex)] ?: from
+        val f = clamped - clamped.toInt()
+        return TabSpot(lerp(from.left, to.left, f), lerp(from.right, to.right, f), lerp(from.top, to.top, f), lerp(from.bottom, to.bottom, f))
     }
 
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        modifier = Modifier
-            .horizontalScroll(scroll)
-            .padding(horizontal = 4.dp)
-            // Its own layer, so the light's edges can be faded out without touching anything else.
+    Box(
+        modifier
+            .fillMaxWidth()
+            .onSizeChanged { viewport = it.width }
+            .clipToBounds()
+            // Its own layer, so the edges can be faded without touching anything else.
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawBehind {
-                val pos = position().coerceIn(0f, (tabs.size - 1).coerceAtLeast(0).toFloat())
-                val from = spots[pos.toInt()] ?: return@drawBehind
-                val to = spots[(pos.toInt() + 1).coerceAtMost(tabs.lastIndex)] ?: from
-                val f = pos - pos.toInt()
-                val left = lerp(from.left, to.left, f)
-                val right = lerp(from.right, to.right, f)
-                val textTop = lerp(from.top, to.top, f)
-                val textBottom = lerp(from.bottom, to.bottom, f)
-                val accent = colors.primary
-                val lineHeight = 2.5.dp.toPx()
-                val lineTop = textBottom + 5.dp.toPx()
-                // The light: strongest at the line, gone halfway up the word.
-                val glowTop = textTop + (textBottom - textTop) * 0.5f
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.5f to accent.copy(alpha = 0.14f),
-                        1f to accent.copy(alpha = 0.45f),
-                        startY = glowTop,
-                        endY = lineTop,
-                    ),
-                    topLeft = Offset(left, glowTop),
-                    size = Size(right - left, lineTop - glowTop),
-                )
-                // Soften the sides, like a beam rather than a box.
+            .drawWithContent {
+                drawContent()
+                val fade = 36.dp.toPx()
+                val end = size.width - endClearance.toPx()
                 drawRect(
                     brush = Brush.horizontalGradient(
                         0f to Color.Transparent,
-                        0.2f to Color.Black,
-                        0.8f to Color.Black,
-                        1f to Color.Transparent,
-                        startX = left,
-                        endX = right,
+                        (fade / size.width) to Color.Black,
+                        ((end - fade) / size.width).coerceAtLeast(0f) to Color.Black,
+                        (end / size.width).coerceIn(0f, 1f) to Color.Transparent,
                     ),
-                    topLeft = Offset(left, glowTop),
-                    size = Size(right - left, lineTop - glowTop),
                     blendMode = BlendMode.DstIn,
-                )
-                drawRoundRect(
-                    color = accent,
-                    topLeft = Offset(left, lineTop),
-                    size = Size(right - left, lineHeight),
-                    cornerRadius = CornerRadius(lineHeight / 2),
                 )
             },
     ) {
-        tabs.forEachIndexed { index, tab ->
-            val active = index == selected
-            val lit by animateFloatAsState(if (active) 1f else 0f, tween(220), label = "tabText")
-            Text(
-                text = tab.label,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                ),
-                color = lerp(colors.onSurfaceVariant, colors.onSurface, lit),
-                modifier = Modifier
-                    .onPlaced { coords ->
-                        val at = coords.positionInParent()
-                        with(density) {
-                            spots[index] = TabSpot(
-                                left = at.x + padX.toPx(),
-                                right = at.x + coords.size.width - padX.toPx(),
-                                top = at.y + padTop.toPx(),
-                                bottom = at.y + coords.size.height - padBottom.toPx(),
-                            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier
+                .wrapContentWidth(Alignment.Start, unbounded = true)
+                .graphicsLayer {
+                    val spot = spotAt(position())
+                    translationX = if (spot == null) 0f else viewport / 2f - (spot.left + spot.right) / 2f
+                }
+                .drawBehind {
+                    val spot = spotAt(position()) ?: return@drawBehind
+                    val accent = colors.primary
+                    val lineHeight = 2.5.dp.toPx()
+                    val lineTop = spot.bottom + 5.dp.toPx()
+                    // The light leaves the line and fans out as it rises: its left side
+                    // leans like a backslash, its right like a slash, gone halfway up the word.
+                    val glowTop = spot.top + (spot.bottom - spot.top) * 0.5f
+                    val height = lineTop - glowTop
+                    val spread = height * 0.9f
+                    val layers = 6
+                    val brush = Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.5f to accent.copy(alpha = 0.035f),
+                        1f to accent.copy(alpha = 0.09f),
+                        startY = glowTop,
+                        endY = lineTop,
+                    )
+                    // Stacked, ever narrower beams: bright in the middle, soft at the sides.
+                    repeat(layers) { k ->
+                        val inset = spread * k / layers
+                        val beam = Path().apply {
+                            moveTo(spot.left, lineTop)
+                            lineTo(spot.left - spread + inset, glowTop)
+                            lineTo(spot.right + spread - inset, glowTop)
+                            lineTo(spot.right, lineTop)
+                            close()
                         }
+                        drawPath(beam, brush)
                     }
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSelect(index) }
-                    .padding(start = padX, end = padX, top = padTop, bottom = padBottom),
-            )
+                    drawRoundRect(
+                        color = accent,
+                        topLeft = Offset(spot.left, lineTop),
+                        size = Size(spot.right - spot.left, lineHeight),
+                        cornerRadius = CornerRadius(lineHeight / 2),
+                    )
+                },
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                val active = index == selected
+                val lit by animateFloatAsState(if (active) 1f else 0f, tween(220), label = "tabText")
+                Text(
+                    text = tab.label,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    ),
+                    color = lerp(colors.onSurfaceVariant, colors.onSurface, lit),
+                    modifier = Modifier
+                        .onPlaced { coords ->
+                            val at = coords.positionInParent()
+                            with(density) {
+                                spots[index] = TabSpot(
+                                    left = at.x + padX.toPx(),
+                                    right = at.x + coords.size.width - padX.toPx(),
+                                    top = at.y + padTop.toPx(),
+                                    bottom = at.y + coords.size.height - padBottom.toPx(),
+                                )
+                            }
+                        }
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onSelect(index) }
+                        .padding(start = padX, end = padX, top = padTop, bottom = padBottom),
+                )
+            }
         }
     }
 }
