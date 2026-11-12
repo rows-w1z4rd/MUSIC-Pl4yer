@@ -15,11 +15,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /**
- * Color themes, all on pure black. Most are well-known palettes from the Linux desktop world.
- * (OLED is the plain grey one; the name is kept so saved settings still match.)
+ * Color themes. Each has a dark version on pure black and a light version. Most are
+ * well-known palettes from the Linux desktop world.
+ * (OLED is the plain blue-accented one; the name is kept so saved settings still match.)
  */
 enum class Palette(val label: String) {
     OLED("Mono"),
+    WALLPAPER("From wallpaper"),
     PHOSPHOR("Phosphor"),
     MOCHA("Catppuccin Mocha"),
     NORD("Nord"),
@@ -28,6 +30,13 @@ enum class Palette(val label: String) {
     TOKYO_NIGHT("Tokyo Night"),
     GRAPHITE("Graphite"),
     SYSTEM("Phone colors"),
+}
+
+/** Light or dark. Automatic follows the wallpaper's brightness, or the phone without one. */
+enum class ThemeMode(val label: String) {
+    AUTO("Automatic"),
+    LIGHT("Light"),
+    DARK("Dark"),
 }
 
 /** Pages that can be shown in the library, in the user's chosen order. */
@@ -46,6 +55,7 @@ val DefaultTabs = listOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.ALBU
 
 data class Appearance(
     val palette: Palette = Palette.OLED,
+    val mode: ThemeMode = ThemeMode.AUTO,
     /** ARGB accent color, or null to use the palette's own accent. */
     val accent: Int? = null,
     /** Text shown at the top of the library; empty shows nothing. */
@@ -73,6 +83,7 @@ class SettingsStore(private val context: Context) {
         Appearance(
             palette = p[PALETTE]?.let { name -> Palette.entries.find { it.name == name } }
                 ?: Palette.OLED,
+            mode = p[MODE]?.let { name -> ThemeMode.entries.find { it.name == name } } ?: ThemeMode.AUTO,
             accent = p[ACCENT],
             headerText = p[HEADER] ?: "",
             tabs = p[TABS]?.let(::parseTabs) ?: DefaultTabs,
@@ -89,6 +100,10 @@ class SettingsStore(private val context: Context) {
     /** Skipping silence turns off the low-power audio path, so it is off by default. */
     val skipSilence: Flow<Boolean> =
         context.dataStore.data.map { it[SKIP_SILENCE] ?: false }.distinctUntilChanged()
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { it[MODE] = mode.name }
+    }
 
     suspend fun setPalette(palette: Palette) {
         context.dataStore.edit {
@@ -163,6 +178,7 @@ class SettingsStore(private val context: Context) {
         const val MAX_WALLPAPER_SCALE = 4f
 
         private val PALETTE = stringPreferencesKey("palette")
+        private val MODE = stringPreferencesKey("theme_mode")
         private val ACCENT = intPreferencesKey("accent")
         private val HEADER = stringPreferencesKey("header_text")
         private val TABS = stringPreferencesKey("tabs")

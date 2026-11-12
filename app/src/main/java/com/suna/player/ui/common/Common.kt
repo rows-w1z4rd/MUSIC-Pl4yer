@@ -54,6 +54,7 @@ import coil3.compose.AsyncImage
 import com.suna.player.data.Song
 import com.suna.player.data.albumArtUri
 import com.suna.player.ui.theme.LocalHasWallpaper
+import com.suna.player.ui.theme.LocalIsLight
 import com.suna.player.ui.theme.SmallLabel
 
 /** Height the floating mini player covers at the bottom; lists add it as bottom padding. */
@@ -65,14 +66,15 @@ val PanelShape = RoundedCornerShape(16.dp)
 @Composable
 fun cardColor(): Color {
     val panel = MaterialTheme.colorScheme.surfaceContainerLow
-    return if (LocalHasWallpaper.current) panel.copy(alpha = 0.58f) else panel
+    return if (LocalHasWallpaper.current) panel.copy(alpha = if (LocalIsLight.current) 0.7f else 0.58f) else panel
 }
 
 /** Hairline outline that gives panels their edge, like windows in a tiling desktop. */
 @Composable
 fun borderColor(): Color {
     val border = MaterialTheme.colorScheme.outlineVariant
-    return if (LocalHasWallpaper.current) Color.White.copy(alpha = 0.10f) else border
+    if (!LocalHasWallpaper.current) return border
+    return if (LocalIsLight.current) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.10f)
 }
 
 /** A floating panel with a thin outline, separated from the screen edges by a small gap. */

@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            SunaTheme(current) {
+            SunaTheme(current, wallpaper) {
                 AppBackground(wallpaper = wallpaper, appearance = current) {
                     if (current != null) AppRoot(app, current, wallpaper)
                 }
@@ -186,13 +186,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val playNext: (Song) -> Unit = { player.playNext(listOf(it)) }
     val openSongOptions: (Song) -> Unit = { optionsFor = OptionsTarget(it, playlistId = null) }
 
-    // Back closes the full screen player before leaving the page under it.
-    BackHandler(enabled = showPlayer && expansion.targetValue > 0f) {
-        scope.launch { expansion.collapse() }
-    }
     LaunchedEffect(showPlayer) { if (!showPlayer) expansion.snapTo(0f) }
-    // Picking songs ends with Back, or when leaving the page it started on.
-    BackHandler(enabled = selection.active) { selection.clear() }
+    // Picking songs also ends when leaving the page it started on.
     LaunchedEffect(route) { selection.clear() }
 
     Box(Modifier.fillMaxSize()) {
@@ -358,6 +353,13 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 }
             }
         }
+
+        // Declared after the NavHost so they get Back before page navigation does: Back first
+        // closes the full screen player or ends picking songs, then leaves the page.
+        BackHandler(enabled = showPlayer && expansion.targetValue > 0f) {
+            scope.launch { expansion.collapse() }
+        }
+        BackHandler(enabled = selection.active) { selection.clear() }
 
         if (showPlayer) {
             PlayerSheet(

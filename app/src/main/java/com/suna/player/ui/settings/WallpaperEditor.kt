@@ -1,5 +1,6 @@
 package com.suna.player.ui.settings
 
+import com.suna.player.ui.theme.LocalIsLight
 import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -51,8 +52,9 @@ fun WallpaperEditor(
     Box(
         Modifier
             .fillMaxSize()
-            // Space the picture doesn't cover is true black, so it's simply off on OLED.
-            .background(Color.Black)
+            // Space the picture doesn't cover is true black (simply off on OLED), or white in
+            // the light version.
+            .background(if (LocalIsLight.current) Color.White else Color.Black)
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     scale = (scale * zoom).coerceIn(
@@ -66,7 +68,8 @@ fun WallpaperEditor(
     ) {
         if (wallpaper != null) {
             WallpaperImage(wallpaper, scale, x, y)
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = appearance.dim)))
+            val veil = if (LocalIsLight.current) Color.White else Color.Black
+            Box(Modifier.fillMaxSize().background(veil.copy(alpha = appearance.dim)))
         }
 
         Column(

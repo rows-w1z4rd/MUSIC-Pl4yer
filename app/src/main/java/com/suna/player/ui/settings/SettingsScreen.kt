@@ -1,5 +1,9 @@
 package com.suna.player.ui.settings
 
+import com.suna.player.ui.theme.LocalWallpaperTones
+import com.suna.player.ui.theme.LocalIsLight
+import com.suna.player.data.ThemeMode
+import androidx.compose.material.icons.rounded.Contrast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -109,6 +113,7 @@ import kotlin.math.roundToInt
 /** The settings pages. The main list opens each detail page in place. */
 private enum class Page(val title: String) {
     MAIN("Settings"),
+    MODE("Light and dark"),
     THEME("Theme"),
     ACCENT("Accent color"),
     WALLPAPER("Wallpaper"),
@@ -147,7 +152,8 @@ fun SettingsScreen(
         ) {
             when (shown) {
                 Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save) { page = it }
-                Page.THEME -> ThemePage(appearance, save)
+                Page.MODE -> ModePage(appearance, save)
+                Page.THEME -> ThemePage(appearance, wallpaper != null, save)
                 Page.ACCENT -> AccentPage(appearance, save)
                 Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onAdjustWallpaper)
                 Page.HEADER -> HeaderPage(appearance, save)
@@ -372,6 +378,8 @@ private fun MainPage(
     }
 
     Group("Appearance") {
+        SettingRow(Icons.Rounded.Contrast, Grey, "Light and dark", appearance.mode.label, onClick = { open(Page.MODE) })
+        RowDivider()
         SettingRow(Icons.Rounded.Palette, Indigo, "Theme", appearance.palette.label, onClick = { open(Page.THEME) })
         RowDivider()
         SettingRow(
@@ -437,13 +445,43 @@ private fun MainPage(
 }
 
 // ---------------------------------------------------------------------------------------------
+// Light and dark
+// ---------------------------------------------------------------------------------------------
+
+@Composable
+private fun ModePage(appearance: Appearance, save: Save) {
+    Group(
+        footer = "Automatic matches your wallpaper: a bright picture gets the light version, a dark " +
+            "one the dark version. Without a wallpaper it follows your phone's dark mode.",
+    ) {
+        ThemeMode.entries.forEachIndexed { index, mode ->
+            SettingRow(
+                icon = null,
+                tint = Color.Transparent,
+                title = mode.label,
+                onClick = { save { setThemeMode(mode) } },
+                trailing = {
+                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                        if (appearance.mode == mode) {
+                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                },
+            )
+            if (index < ThemeMode.entries.lastIndex) RowDivider(start = 14)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Theme
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-private fun ThemePage(appearance: Appearance, save: Save) {
+private fun ThemePage(appearance: Appearance, hasWallpaper: Boolean, save: Save) {
+    val choices = Palette.entries.filter { it != Palette.WALLPAPER || hasWallpaper }
     Column(Modifier.padding(horizontal = 16.dp)) {
-        Palette.entries.chunked(2).forEach { pair ->
+        choices.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 16.dp)) {
                 pair.forEach { palette ->
                     ThemeCard(
@@ -457,7 +495,8 @@ private fun ThemePage(appearance: Appearance, save: Save) {
             }
         }
         Text(
-            "Every theme keeps a true black background, so the screen's unlit pixels stay off. " +
+            "Every theme has a light version and a dark version on true black, so the screen's " +
+                "unlit pixels stay off. From wallpaper takes its colors from your picture. " +
                 "Catppuccin, Nord, Gruvbox, Rosé Pine and Tokyo Night are open-source color schemes.",
             fontSize = 13.sp,
             lineHeight = 18.sp,
@@ -471,7 +510,7 @@ private fun ThemePage(appearance: Appearance, save: Save) {
 @Composable
 private fun ThemeCard(palette: Palette, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val c = palette.colors()
+    val c = palette.colors(LocalIsLight.current, LocalWallpaperTones.current)
     val background = c?.background ?: scheme.background
     val panel = c?.panel ?: scheme.surfaceContainerLow
     val raised = c?.raised ?: scheme.surfaceContainerHigh
@@ -559,7 +598,8 @@ private fun ThemeCard(palette: Palette, selected: Boolean, modifier: Modifier, o
 
 @Composable
 private fun AccentPage(appearance: Appearance, save: Save) {
-    val themeAccent = appearance.palette.colors()?.accent ?: MaterialTheme.colorScheme.primary
+    val themeAccent = appearance.palette.colors(LocalIsLight.current, LocalWallpaperTones.current)?.accent
+        ?: MaterialTheme.colorScheme.primary
 
     Group(footer = "Used for buttons, progress bars and the selected tab.") {
         SettingRow(
@@ -628,7 +668,11 @@ private fun WallpaperPage(
             scope.launch {
                 val ok = wallpapers.import(uri)
                 importFailed = !ok
-                if (ok) settings.setWallpaper(true)
+                if (ok) {
+                    settings.setWallpaper(true)
+                    // The app takes on the picture's colors; any other theme is a tap away.
+                    settings.setPalette(Palette.WALLPAPER)
+                }
             }
         }
     }
@@ -642,7 +686,7 @@ private fun WallpaperPage(
                 .width(150.dp)
                 .aspectRatio(9f / 19.5f)
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color.Black)
+                .background(if (LocalIsLight.current) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Black)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(22.dp))
                 .clickable(onClick = if (wallpaper != null) onAdjust else choose),
         ) {
@@ -660,9 +704,10 @@ private fun WallpaperPage(
                             translationY = appearance.wallpaperY * size.height
                         },
                 )
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = appearance.dim)))
+                val veil = if (LocalIsLight.current) Color.White else Color.Black
+                Box(Modifier.fillMaxSize().background(veil.copy(alpha = appearance.dim)))
             } else {
-                Text("No wallpaper", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+                Text("No wallpaper", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -693,6 +738,7 @@ private fun WallpaperPage(
                 onClick = {
                     scope.launch {
                         settings.setWallpaper(false)
+                        if (appearance.palette == Palette.WALLPAPER) settings.setPalette(Palette.OLED)
                         wallpapers.clear()
                     }
                 },

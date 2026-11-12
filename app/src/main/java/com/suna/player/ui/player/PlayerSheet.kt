@@ -1,8 +1,5 @@
 package com.suna.player.ui.player
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
@@ -59,7 +56,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -86,12 +82,10 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -101,7 +95,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -115,6 +108,7 @@ import com.suna.player.ui.common.Artwork
 import com.suna.player.ui.common.borderColor
 import com.suna.player.ui.common.formatTime
 import com.suna.player.ui.theme.LocalHasWallpaper
+import com.suna.player.ui.theme.LocalIsLight
 import com.suna.player.ui.theme.SmallLabel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
@@ -143,10 +137,19 @@ private val FlingSpeed = 400.dp
 /** No bounce: the player glides into place and stops dead, like a well-damped drawer. */
 private val SettleSpec = spring<Float>(dampingRatio = 1f, stiffness = 380f)
 
-// The full player is always black, whatever the theme: it's the OLED "stage" for the artwork.
-private val Stage = Color.Black
-private val TextBright = Color(0xFFF5F5F7)
-private val TextDim = Color(0xFF9A9AA0)
+/**
+ * The full player's "stage" for the artwork: pure black in the dark version, the theme's
+ * light background in the light one.
+ */
+private data class StageColors(val background: Color, val bright: Color, val dim: Color)
+
+@Composable
+private fun stageColors(): StageColors =
+    if (LocalIsLight.current) {
+        StageColors(MaterialTheme.colorScheme.background, Color(0xFF1C1C1E), Color(0xFF6E6E73))
+    } else {
+        StageColors(Color.Black, Color(0xFFF5F5F7), Color(0xFF9A9AA0))
+    }
 
 suspend fun Animatable<Float, AnimationVector1D>.expand() = animateTo(1f, SettleSpec)
 suspend fun Animatable<Float, AnimationVector1D>.collapse() = animateTo(0f, SettleSpec)
@@ -177,10 +180,9 @@ fun PlayerSheet(
     val statusTop = WindowInsets.statusBars.getTop(density).toFloat()
     val navBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
 
-    val isOpen by remember { derivedStateOf { expansion.value > 0.5f } }
     val showMini by remember { derivedStateOf { expansion.value < 0.3f } }
     val showFull by remember { derivedStateOf { expansion.value > 0.001f } }
-    DarkSystemBarsWhile(isOpen)
+    val stage = stageColors()
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = constraints.maxWidth.toFloat()
@@ -227,7 +229,7 @@ fun PlayerSheet(
                     )
                     clip = true
                 }
-                .drawBehind { drawRect(lerp(miniColor, Stage, expansion.value)) }
+                .drawBehind { drawRect(lerp(miniColor, stage.background, expansion.value)) }
                 .drawWithContent {
                     drawContent()
                     val p = expansion.value
@@ -347,33 +349,6 @@ private data class SheetShape(
     }
 }
 
-/** Status and navigation bar icons turn light over the black player on light themes. */
-@Composable
-private fun DarkSystemBarsWhile(open: Boolean) {
-    val view = LocalView.current
-    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    DisposableEffect(open, lightTheme) {
-        val window = view.context.findActivity()?.window
-        val bars = window?.let { WindowCompat.getInsetsController(it, view) }
-        if (bars != null && lightTheme) {
-            bars.isAppearanceLightStatusBars = !open
-            bars.isAppearanceLightNavigationBars = !open
-        }
-        onDispose {
-            if (bars != null && lightTheme) {
-                bars.isAppearanceLightStatusBars = true
-                bars.isAppearanceLightNavigationBars = true
-            }
-        }
-    }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
-
 /** Reads the playback position twice a second, only while [active] and the app is on screen. */
 @Composable
 private fun rememberPosition(player: PlayerConnection, active: Boolean, key: Any?): Long {
@@ -460,6 +435,7 @@ private fun MiniBar(
 /** The artwork, tiny and blurred, glowing behind the top of the full player. */
 @Composable
 private fun StageBackground(current: QueueEntry, modifier: Modifier) {
+    val stage = stageColors()
     val context = LocalContext.current
     // A tiny copy of the artwork is enough for a blur, and much cheaper to draw every frame.
     val tiny = remember(current.artUri) {
@@ -481,9 +457,9 @@ private fun StageBackground(current: QueueEntry, modifier: Modifier) {
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to Stage.copy(alpha = 0.25f),
-                    0.45f to Stage.copy(alpha = 0.7f),
-                    0.75f to Stage,
+                    0f to stage.background.copy(alpha = 0.25f),
+                    0.45f to stage.background.copy(alpha = 0.7f),
+                    0.75f to stage.background,
                 ),
             ),
         )
@@ -504,12 +480,13 @@ private fun FullPlayer(
     isFavorite: Boolean,
     onToggleFavorite: (() -> Unit)?,
 ) {
+    val stage = stageColors()
     var scrub by remember { mutableStateOf<Float?>(null) }
     val position = rememberPosition(player, active = true, key = current.mediaId)
     var shownPosition by remember(position) { mutableLongStateOf(position) }
     val duration = state.durationMs
 
-    CompositionLocalProvider(LocalContentColor provides TextBright) {
+    CompositionLocalProvider(LocalContentColor provides stage.bright) {
         Column(modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -547,7 +524,7 @@ private fun FullPlayer(
                         Text(
                             current.artist,
                             fontSize = 16.sp,
-                            color = TextDim,
+                            color = stage.dim,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 2.dp),
@@ -564,7 +541,7 @@ private fun FullPlayer(
                             Icon(
                                 if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                tint = if (isFavorite) MaterialTheme.colorScheme.primary else TextBright,
+                                tint = if (isFavorite) MaterialTheme.colorScheme.primary else stage.bright,
                                 modifier = Modifier.graphicsLayer {
                                     val s = 1f + 0.72f * pop * (1f - pop)
                                     scaleX = s
@@ -598,8 +575,8 @@ private fun FullPlayer(
                     )
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         val shown = scrub?.let { (it * duration).toLong() } ?: shownPosition
-                        Text(formatTime(shown), style = SmallLabel, color = TextDim)
-                        Text(formatTime(duration), style = SmallLabel, color = TextDim)
+                        Text(formatTime(shown), style = SmallLabel, color = stage.dim)
+                        Text(formatTime(duration), style = SmallLabel, color = stage.dim)
                     }
                 }
 
@@ -609,7 +586,7 @@ private fun FullPlayer(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     IconButton(onClick = player::shuffleUpcoming) {
-                        Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle up next", tint = TextDim)
+                        Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle up next", tint = stage.dim)
                     }
                     IconButton(onClick = player::previous, modifier = Modifier.size(60.dp)) {
                         Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous song", modifier = Modifier.size(40.dp))
@@ -642,7 +619,7 @@ private fun FullPlayer(
                                 Player.REPEAT_MODE_ALL -> "Repeating the queue"
                                 else -> "Repeat is off"
                             },
-                            tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else TextDim,
+                            tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else stage.dim,
                         )
                     }
                 }
@@ -659,6 +636,7 @@ private fun SeekBar(
     onScrub: (Float) -> Unit,
     onScrubEnd: () -> Unit,
 ) {
+    val stage = stageColors()
     var held by remember { mutableStateOf(false) }
     val thickness by animateDpAsState(if (held) 6.dp else 3.dp, label = "seekThickness")
     val dot by animateDpAsState(if (held) 8.dp else 5.dp, label = "seekDot")
@@ -699,8 +677,8 @@ private fun SeekBar(
         val h = thickness.toPx()
         val y = size.height / 2
         val radius = CornerRadius(h / 2)
-        drawRoundRect(TextBright.copy(alpha = 0.22f), Offset(0f, y - h / 2), Size(size.width, h), radius)
-        drawRoundRect(TextBright, Offset(0f, y - h / 2), Size(size.width * fraction, h), radius)
-        drawCircle(TextBright, radius = dot.toPx(), center = Offset(size.width * fraction, y))
+        drawRoundRect(stage.bright.copy(alpha = 0.22f), Offset(0f, y - h / 2), Size(size.width, h), radius)
+        drawRoundRect(stage.bright, Offset(0f, y - h / 2), Size(size.width * fraction, h), radius)
+        drawCircle(stage.bright, radius = dot.toPx(), center = Offset(size.width * fraction, y))
     }
 }
