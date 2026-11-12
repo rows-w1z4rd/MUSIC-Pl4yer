@@ -378,13 +378,12 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 state = playerState,
                 player = player,
                 expansion = expansion,
-                onOpenQueue = {
-                    scope.launch { expansion.snapTo(0f) }
-                    nav.navigate(Routes.QUEUE) { launchSingleTop = true }
-                },
                 onMore = current.mediaId.toLongOrNull()
                     ?.let { songsById[it] }
                     ?.let { song -> { optionsFor = OptionsTarget(song, playlistId = null) } },
+                onAddToPlaylist = current.mediaId.toLongOrNull()
+                    ?.let { songsById[it] }
+                    ?.let { song -> { addToPlaylist = listOf(song) } },
                 isFavorite = current?.mediaId?.toLongOrNull() in favoriteSet,
                 onToggleFavorite = current?.mediaId?.toLongOrNull()?.let { id -> { app.favorites.toggle(id) } },
             )

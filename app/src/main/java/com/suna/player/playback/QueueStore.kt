@@ -21,6 +21,10 @@ class QueueStore(context: Context) {
         get() = prefs.getInt(KEY_REPEAT, Player.REPEAT_MODE_OFF)
         set(value) = prefs.edit().putInt(KEY_REPEAT, value).apply()
 
+    var shuffle: Boolean
+        get() = prefs.getBoolean(KEY_SHUFFLE, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHUFFLE, value).apply()
+
     fun savePosition(index: Int, positionMs: Long) {
         prefs.edit().putInt(KEY_INDEX, index).putLong(KEY_POSITION, positionMs).apply()
     }
@@ -72,5 +76,6 @@ class QueueStore(context: Context) {
         const val KEY_INDEX = "index"
         const val KEY_POSITION = "position"
         const val KEY_REPEAT = "repeat"
+        const val KEY_SHUFFLE = "shuffle"
     }
 }

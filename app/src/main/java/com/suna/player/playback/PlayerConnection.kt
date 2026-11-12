@@ -1,5 +1,7 @@
 package com.suna.player.playback
 
+import androidx.media3.session.SessionCommand
+import android.os.Bundle
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
@@ -29,6 +31,9 @@ data class PlayerUiState(
     val isPlaying: Boolean = false,
     val durationMs: Long = 0,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val shuffle: Boolean = false,
+    /** Extra plays left of the current track, from holding the play button. */
+    val repeatsLeft: Int = 0,
 ) {
     val current: QueueEntry? get() = queue.getOrNull(currentIndex)
 }
@@ -54,7 +59,13 @@ class PlayerConnection(private val context: Context) {
     fun connect() {
         if (future != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val pending = MediaController.Builder(context, token).buildAsync()
+        val pending = MediaController.Builder(context, token)
+            .setListener(object : MediaController.Listener {
+                override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
+                    publish(controller, rebuildQueue = false)
+                }
+            })
+            .buildAsync()
         future = pending
         pending.addListener(
             {
@@ -91,6 +102,9 @@ class PlayerConnection(private val context: Context) {
             isPlaying = player.isPlaying,
             durationMs = player.duration.coerceAtLeast(0),
             repeatMode = player.repeatMode,
+            shuffle = player.shuffleModeEnabled,
+            repeatsLeft = (player as? MediaController)?.sessionExtras
+                ?.getInt(PlaybackService.EXTRA_REPEATS_LEFT) ?: 0,
         )
     }
 
@@ -191,6 +205,29 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun positionMs(): Long = controller?.currentPosition?.coerceAtLeast(0) ?: 0L
+
+    fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+    }
+
+    /** Plays the current track [times] more times (1 to 3), starting playback if paused. */
+    fun repeatCurrent(times: Int) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) return
+        c.sendCustomCommand(
+            SessionCommand(PlaybackService.COMMAND_REPEAT_TIMES, Bundle.EMPTY),
+            Bundle().apply { putInt(PlaybackService.EXTRA_TIMES, times) },
+        )
+        if (!c.isPlaying) togglePlay()
+    }
+
+    /** Jumps forward or back within the track, for holding the next and previous buttons. */
+    fun nudge(deltaMs: Long) {
+        val c = controller ?: return
+        val duration = c.duration.takeIf { it > 0 } ?: return
+        c.seekTo((c.currentPosition + deltaMs).coerceIn(0, duration - 500))
+    }
 
     fun cycleRepeat() {
         val c = controller ?: return

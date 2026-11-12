@@ -1,5 +1,16 @@
 package com.suna.player.ui.player
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
@@ -40,12 +51,8 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
@@ -53,7 +60,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -128,8 +134,14 @@ val MiniPlayerSpace = MiniHeight + MiniMargin * 2
 private val TopBarHeight = 56.dp
 private val ArtSidePadding = 28.dp
 
+/** Space between the top bar and the artwork. */
+private val ArtTopGap = 24.dp
+
+/** Holding play counts up to this many repeats. */
+private const val MaxRepeats = 3
+
 /** What the title, seek bar and buttons need under the artwork in the full player. */
-private val ControlsHeight = 290.dp
+private val ControlsHeight = 330.dp
 
 /** A drag released faster than this flings the player open or shut. */
 private val FlingSpeed = 400.dp
@@ -167,9 +179,9 @@ fun PlayerSheet(
     state: PlayerUiState,
     player: PlayerConnection,
     expansion: Animatable<Float, AnimationVector1D>,
-    onOpenQueue: () -> Unit,
     /** Opens the song menu for the playing song. */
     onMore: (() -> Unit)?,
+    onAddToPlaylist: (() -> Unit)?,
     isFavorite: Boolean,
     onToggleFavorite: (() -> Unit)?,
 ) {
@@ -185,6 +197,16 @@ fun PlayerSheet(
     val showFull by remember { derivedStateOf { expansion.value > 0.001f } }
     val stage = stageColors()
 
+    // The queue opens in place of the artwork, as on Samsung's player.
+    var queueOpen by remember { mutableStateOf(false) }
+    val queueShown by animateFloatAsState(
+        targetValue = if (queueOpen) 1f else 0f,
+        animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
+        label = "queueShown",
+    )
+    LaunchedEffect(showFull) { if (!showFull) queueOpen = false }
+    BackHandler(enabled = queueOpen && showFull) { queueOpen = false }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = constraints.maxWidth.toFloat()
         val height = constraints.maxHeight.toFloat()
@@ -193,11 +215,11 @@ fun PlayerSheet(
 
         // Where the artwork sits in the full player, and in the bar.
         val artSize = min(
-            width - 2 * px(ArtSidePadding),
-            height - statusTop - navBottom - px(TopBarHeight + 8.dp + ControlsHeight),
+            width * 0.74f,
+            height - statusTop - navBottom - px(TopBarHeight + ArtTopGap + ControlsHeight),
         ).coerceAtLeast(px(120.dp))
         val artLeft = (width - artSize) / 2
-        val artTop = statusTop + px(TopBarHeight + 8.dp)
+        val artTop = statusTop + px(TopBarHeight + ArtTopGap)
         val miniArtLeft = px(MiniMargin + MiniArtStart)
         val miniArtTop = px((MiniHeight - MiniArt) / 2)
         val miniScale = px(MiniArt) / artSize
@@ -270,14 +292,17 @@ fun PlayerSheet(
                     player = player,
                     artSize = with(density) { artSize.toDp() },
                     sidePadding = with(density) { artLeft.toDp() },
+                    queueOpen = queueOpen,
+                    queueShown = { queueShown },
                     modifier = Modifier.graphicsLayer {
                         val p = expansion.value
                         alpha = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
                         translationY = (1f - p) * px(48.dp)
                     },
                     onCollapse = { scope.launch { expansion.collapse() } },
-                    onOpenQueue = onOpenQueue,
+                    onToggleQueue = { queueOpen = !queueOpen },
                     onMore = onMore,
+                    onAddToPlaylist = onAddToPlaylist,
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
                 )
@@ -306,7 +331,8 @@ fun PlayerSheet(
                     .graphicsLayer {
                         val p = expansion.value
                         val travel = lerp(miniScale, 1f, p)
-                        val scale = travel * lerp(1f, pausedShrink, p)
+                        val scale = travel * lerp(1f, pausedShrink, p) * lerp(1f, 0.9f, queueShown)
+                        alpha = 1f - queueShown
                         val slot = artSize * travel
                         val shown = artSize * scale
                         transformOrigin = TransformOrigin(0f, 0f)
@@ -474,19 +500,25 @@ private fun FullPlayer(
     player: PlayerConnection,
     artSize: Dp,
     sidePadding: Dp,
+    queueOpen: Boolean,
+    queueShown: () -> Float,
     modifier: Modifier,
     onCollapse: () -> Unit,
-    onOpenQueue: () -> Unit,
-    /** Opens the song menu for the playing song. */
+    onToggleQueue: () -> Unit,
     onMore: (() -> Unit)?,
+    onAddToPlaylist: (() -> Unit)?,
     isFavorite: Boolean,
     onToggleFavorite: (() -> Unit)?,
 ) {
     val stage = stageColors()
+    val accent = MaterialTheme.colorScheme.primary
     var scrub by remember { mutableStateOf<Float?>(null) }
     val position = rememberPosition(player, active = true, key = current.mediaId)
     var shownPosition by remember(position) { mutableLongStateOf(position) }
     val duration = state.durationMs
+    // While the play button is held: how many repeats are being counted up.
+    var counting by remember { mutableIntStateOf(0) }
+    val repeatBadge = if (counting > 0) counting else state.repeatsLeft
 
     CompositionLocalProvider(LocalContentColor provides stage.bright) {
         Column(modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -495,44 +527,71 @@ private fun FullPlayer(
                 modifier = Modifier.fillMaxWidth().height(TopBarHeight).padding(horizontal = 8.dp),
             ) {
                 IconButton(onClick = onCollapse) {
-                    Icon(
-                        Icons.Rounded.KeyboardArrowDown,
-                        contentDescription = "Minimize player",
-                        modifier = Modifier.size(32.dp),
-                    )
+                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Minimize player", modifier = Modifier.size(32.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = onOpenQueue) {
-                    Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue")
+                if (onMore != null) {
+                    IconButton(onClick = onMore) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
+                    }
                 }
             }
 
-            // The artwork itself is drawn by the sheet, flying in from the bar.
-            Spacer(Modifier.height(8.dp + artSize))
+            // The artwork (drawn by the sheet, flying in from the bar) and the title, or the
+            // queue in their place.
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = 1f - queueShown() },
+                ) {
+                    Spacer(Modifier.height(ArtTopGap + artSize + 22.dp))
+                    Text(
+                        current.title,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = sidePadding),
+                    )
+                    Text(
+                        current.artist,
+                        fontSize = 16.sp,
+                        color = stage.dim,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = sidePadding).padding(top = 4.dp),
+                    )
+                }
+                if (queueOpen || queueShown() > 0f) {
+                    InlineQueue(
+                        state = state,
+                        open = queueOpen,
+                        onPlayIndex = player::playQueueItem,
+                        onRemove = player::removeFromQueue,
+                        modifier = Modifier.graphicsLayer { alpha = queueShown() },
+                    )
+                }
+            }
 
-            // Title and seek bar sit close under the artwork; the buttons get the room below.
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = sidePadding)) {
-                Spacer(Modifier.height(22.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            current.title,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            current.artist,
-                            fontSize = 16.sp,
-                            color = stage.dim,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp),
+            Column(Modifier.padding(horizontal = 24.dp)) {
+                // Queue, like, add: the three things you reach for while listening.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                ) {
+                    IconButton(onClick = onToggleQueue) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.QueueMusic,
+                            contentDescription = if (queueOpen) "Hide queue" else "Show queue",
+                            tint = if (queueOpen) accent else stage.bright,
                         )
                     }
                     if (onToggleFavorite != null) {
-                        // A small pop when hearted, then it settles.
                         val pop by animateFloatAsState(
                             targetValue = if (isFavorite) 1f else 0f,
                             animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium),
@@ -542,7 +601,7 @@ private fun FullPlayer(
                             Icon(
                                 if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                tint = if (isFavorite) MaterialTheme.colorScheme.primary else stage.bright,
+                                tint = if (isFavorite) accent else stage.bright,
                                 modifier = Modifier.graphicsLayer {
                                     val s = 1f + 0.72f * pop * (1f - pop)
                                     scaleX = s
@@ -551,82 +610,185 @@ private fun FullPlayer(
                             )
                         }
                     }
-                    if (onMore != null) {
-                        IconButton(onClick = onMore) {
-                            Icon(Icons.Rounded.MoreHoriz, contentDescription = "More options")
+                    IconButton(onClick = { onAddToPlaylist?.invoke() }, enabled = onAddToPlaylist != null) {
+                        Icon(Icons.Rounded.Add, contentDescription = "Add to playlist")
+                    }
+                }
+
+                // The timeline sits right above the buttons, as on Samsung's player.
+                val fraction = scrub
+                    ?: if (duration > 0) (shownPosition.toFloat() / duration).coerceIn(0f, 1f) else 0f
+                SeekBar(
+                    fraction = fraction,
+                    enabled = duration > 0,
+                    onScrub = { scrub = it },
+                    onScrubEnd = {
+                        scrub?.let {
+                            val target = (it * duration).toLong()
+                            player.seekTo(target)
+                            shownPosition = target
                         }
-                    }
+                        scrub = null
+                    },
+                )
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    val shown = scrub?.let { (it * duration).toLong() } ?: shownPosition
+                    Text(formatTime(shown), style = SmallLabel, color = stage.dim)
+                    Text(formatTime(duration), style = SmallLabel, color = stage.dim)
                 }
 
-                Spacer(Modifier.height(18.dp))
-                Column {
-                    val fraction = scrub
-                        ?: if (duration > 0) (shownPosition.toFloat() / duration).coerceIn(0f, 1f) else 0f
-                    SeekBar(
-                        fraction = fraction,
-                        enabled = duration > 0,
-                        onScrub = { scrub = it },
-                        onScrubEnd = {
-                            scrub?.let {
-                                val target = (it * duration).toLong()
-                                player.seekTo(target)
-                                shownPosition = target
-                            }
-                            scrub = null
-                        },
-                    )
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        val shown = scrub?.let { (it * duration).toLong() } ?: shownPosition
-                        Text(formatTime(shown), style = SmallLabel, color = stage.dim)
-                        Text(formatTime(duration), style = SmallLabel, color = stage.dim)
-                    }
-                }
-
-                Spacer(Modifier.weight(1f))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 26.dp),
                 ) {
-                    IconButton(onClick = player::shuffleUpcoming) {
-                        Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle up next", tint = stage.dim)
+                    IconButton(onClick = player::toggleShuffle) {
+                        ShuffleGlyph(on = state.shuffle, tint = if (state.shuffle) accent else stage.dim)
                     }
-                    IconButton(onClick = player::previous, modifier = Modifier.size(60.dp)) {
-                        Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous song", modifier = Modifier.size(40.dp))
-                    }
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(76.dp)
-                            .clip(CircleShape)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = ripple(bounded = true),
-                                onClick = player::togglePlay,
-                            ),
+                    // Tap for the previous track; hold to rewind 5 seconds at a time.
+                    HoldButton(
+                        onTap = player::previous,
+                        onHoldTick = { player.nudge(-5_000) },
+                        tickMs = 260,
+                        label = "Previous track. Hold to rewind",
                     ) {
-                        Icon(
-                            if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = if (state.isPlaying) "Pause" else "Play",
-                            modifier = Modifier.size(64.dp),
-                        )
+                        Icon(Icons.Rounded.SkipPrevious, contentDescription = null, modifier = Modifier.size(40.dp))
                     }
-                    IconButton(onClick = player::next, modifier = Modifier.size(60.dp)) {
-                        Icon(Icons.Rounded.SkipNext, contentDescription = "Next song", modifier = Modifier.size(40.dp))
+                    // Tap to play or pause; hold to repeat this track, once more per second held, up to 3.
+                    Box(contentAlignment = Alignment.Center) {
+                        HoldButton(
+                            onTap = player::togglePlay,
+                            onHoldTick = { counting = it.coerceAtMost(MaxRepeats) },
+                            onRelease = {
+                                player.repeatCurrent(it.coerceAtMost(MaxRepeats))
+                                counting = 0
+                            },
+                            size = 76.dp,
+                            label = if (state.isPlaying) "Pause. Hold to repeat this track" else "Play. Hold to repeat this track",
+                        ) {
+                            Icon(
+                                if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                            )
+                        }
+                        RepeatBadge(count = repeatBadge, modifier = Modifier.align(Alignment.TopEnd))
+                    }
+                    HoldButton(
+                        onTap = player::next,
+                        onHoldTick = { player.nudge(5_000) },
+                        tickMs = 260,
+                        label = "Next track. Hold to fast-forward",
+                    ) {
+                        Icon(Icons.Rounded.SkipNext, contentDescription = null, modifier = Modifier.size(40.dp))
                     }
                     IconButton(onClick = player::cycleRepeat) {
-                        Icon(
-                            if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            contentDescription = when (state.repeatMode) {
-                                Player.REPEAT_MODE_ONE -> "Repeating this song"
-                                Player.REPEAT_MODE_ALL -> "Repeating the queue"
-                                else -> "Repeat is off"
+                        RepeatGlyph(
+                            mode = state.repeatMode,
+                            tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) accent else stage.dim,
+                            modifier = Modifier.semantics {
+                                contentDescription = when (state.repeatMode) {
+                                    Player.REPEAT_MODE_ONE -> "Repeating this track"
+                                    Player.REPEAT_MODE_ALL -> "Repeating the queue"
+                                    else -> "Repeat is off"
+                                }
                             },
-                            tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else stage.dim,
                         )
                     }
                 }
-                Spacer(Modifier.weight(0.7f))
+            }
+        }
+    }
+}
+
+/** How many more times the track will play, popping in on the play button's corner. */
+@Composable
+private fun RepeatBadge(count: Int, modifier: Modifier) {
+    val shown by animateFloatAsState(
+        targetValue = if (count > 0) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
+        label = "repeatBadge",
+    )
+    if (shown <= 0.01f) return
+    val accent = MaterialTheme.colorScheme.primary
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = shown
+                scaleY = shown
+            }
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(accent),
+    ) {
+        Text(
+            "${count.coerceAtLeast(1)}×",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+/** The queue, shown where the artwork was. Tap a track to play it; × removes it. */
+@Composable
+private fun InlineQueue(
+    state: PlayerUiState,
+    open: Boolean,
+    onPlayIndex: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
+    modifier: Modifier,
+) {
+    val stage = stageColors()
+    val accent = MaterialTheme.colorScheme.primary
+    val list = rememberLazyListState()
+    LaunchedEffect(open) {
+        if (open) list.scrollToItem((state.currentIndex - 1).coerceAtLeast(0))
+    }
+    Column(modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp),
+        ) {
+            Text("Playing queue", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("${state.currentIndex + 1}/${state.queue.size}", style = SmallLabel, color = stage.dim)
+        }
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
+            itemsIndexed(state.queue) { index, entry ->
+                val isCurrent = index == state.currentIndex
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPlayIndex(index) }
+                        .padding(start = 24.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                ) {
+                    Artwork(entry.artUri, Modifier.size(46.dp), corner = 8.dp)
+                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                        Text(
+                            entry.title,
+                            fontSize = 16.sp,
+                            color = if (isCurrent) accent else stage.bright,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            if (entry.playNext && index > state.currentIndex) "${entry.artist} · Up next" else entry.artist,
+                            fontSize = 14.sp,
+                            color = if (isCurrent) accent.copy(alpha = 0.8f) else stage.dim,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (!isCurrent) {
+                        IconButton(onClick = { onRemove(index) }) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Remove ${entry.title} from queue", tint = stage.dim)
+                        }
+                    } else {
+                        Spacer(Modifier.size(48.dp))
+                    }
+                }
             }
         }
     }

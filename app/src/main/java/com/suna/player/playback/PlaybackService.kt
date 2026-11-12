@@ -1,5 +1,8 @@
 package com.suna.player.playback
 
+import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionCommand
+import android.os.Bundle
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
@@ -59,6 +62,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         player.repeatMode = store.repeatMode
+        player.shuffleModeEnabled = store.shuffle
         player.addListener(PlayerEvents())
 
         val openApp = PendingIntent.getActivity(
@@ -191,7 +195,16 @@ class PlaybackService : MediaSessionService() {
             if (!restoreDone) return
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) saveQueue()
             if (events.contains(Player.EVENT_REPEAT_MODE_CHANGED)) {
-                store.repeatMode = player.repeatMode
+                if (changingRepeat) {
+                    changingRepeat = false
+                } else {
+                    // The listener chose a repeat mode themselves: that ends a "repeat N times".
+                    stopRepeats(restore = false)
+                    store.repeatMode = player.repeatMode
+                }
+            }
+            if (events.contains(Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) {
+                store.shuffle = player.shuffleModeEnabled
             }
             if (events.containsAny(
                     Player.EVENT_TIMELINE_CHANGED,
@@ -215,6 +228,14 @@ class PlaybackService : MediaSessionService() {
             val item = oldPosition.mediaItem ?: return
             val finished = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
             val left = oldPosition.mediaItemIndex != newPosition.mediaItemIndex
+            if (repeatsLeft > 0) {
+                when {
+                    // One more time through the same track.
+                    finished && !left -> setRepeatsLeft(repeatsLeft - 1)
+                    // Skipping to another track cancels the remaining repeats.
+                    left -> stopRepeats(restore = true)
+                }
+            }
             if (finished || (left && oldPosition.positionMs >= MIN_COUNTED_MS)) {
                 recordPlay(item, oldPosition.positionMs)
             }
@@ -236,7 +257,70 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    // --- "Repeat this track N times", started by holding the play button ---
+
+    private var repeatsLeft = 0
+    private var repeatModeBefore = Player.REPEAT_MODE_OFF
+    private var changingRepeat = false
+
+    /** Plays the current track [times] more times, then goes back to the previous repeat mode. */
+    private fun startRepeats(times: Int) {
+        if (times <= 0) return stopRepeats(restore = true)
+        if (repeatsLeft == 0) repeatModeBefore = player.repeatMode
+        if (player.repeatMode != Player.REPEAT_MODE_ONE) {
+            changingRepeat = true
+            player.repeatMode = Player.REPEAT_MODE_ONE
+        }
+        setRepeatsLeft(times)
+    }
+
+    private fun setRepeatsLeft(n: Int) {
+        repeatsLeft = n
+        if (n == 0) restoreRepeatMode()
+        session?.setSessionExtras(Bundle().apply { putInt(EXTRA_REPEATS_LEFT, n) })
+    }
+
+    private fun stopRepeats(restore: Boolean) {
+        if (repeatsLeft == 0) return
+        repeatsLeft = 0
+        if (restore) restoreRepeatMode()
+        session?.setSessionExtras(Bundle().apply { putInt(EXTRA_REPEATS_LEFT, 0) })
+    }
+
+    private fun restoreRepeatMode() {
+        if (player.repeatMode != repeatModeBefore) {
+            changingRepeat = true
+            player.repeatMode = repeatModeBefore
+        }
+    }
+
     private inner class SessionCallback : MediaSession.Callback {
+        /** Lets the app's own screens send the "repeat N times" command. */
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(SessionCommand(COMMAND_REPEAT_TIMES, Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == COMMAND_REPEAT_TIMES) {
+                startRepeats(args.getInt(EXTRA_TIMES))
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return super.onCustomCommand(session, controller, customCommand, args)
+        }
+
         /** Items sent from the UI lose their playable address on the way; restore it here. */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
@@ -277,7 +361,11 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private companion object {
+    companion object {
+        const val COMMAND_REPEAT_TIMES = "com.suna.player.REPEAT_TIMES"
+        const val EXTRA_TIMES = "times"
+        const val EXTRA_REPEATS_LEFT = "repeats_left"
+
         const val MIN_COUNTED_MS = 30_000L
     }
 }
