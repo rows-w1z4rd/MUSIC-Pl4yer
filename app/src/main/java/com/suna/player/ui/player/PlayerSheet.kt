@@ -36,11 +36,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -168,7 +168,8 @@ fun PlayerSheet(
     player: PlayerConnection,
     expansion: Animatable<Float, AnimationVector1D>,
     onOpenQueue: () -> Unit,
-    onAddToPlaylist: (() -> Unit)?,
+    /** Opens the song menu for the playing song. */
+    onMore: (() -> Unit)?,
     isFavorite: Boolean,
     onToggleFavorite: (() -> Unit)?,
 ) {
@@ -276,7 +277,7 @@ fun PlayerSheet(
                     },
                     onCollapse = { scope.launch { expansion.collapse() } },
                     onOpenQueue = onOpenQueue,
-                    onAddToPlaylist = onAddToPlaylist,
+                    onMore = onMore,
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
                 )
@@ -476,7 +477,8 @@ private fun FullPlayer(
     modifier: Modifier,
     onCollapse: () -> Unit,
     onOpenQueue: () -> Unit,
-    onAddToPlaylist: (() -> Unit)?,
+    /** Opens the song menu for the playing song. */
+    onMore: (() -> Unit)?,
     isFavorite: Boolean,
     onToggleFavorite: (() -> Unit)?,
 ) {
@@ -508,10 +510,9 @@ private fun FullPlayer(
             // The artwork itself is drawn by the sheet, flying in from the bar.
             Spacer(Modifier.height(8.dp + artSize))
 
-            Column(
-                verticalArrangement = Arrangement.SpaceEvenly,
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = sidePadding),
-            ) {
+            // Title and seek bar sit close under the artwork; the buttons get the room below.
+            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = sidePadding)) {
+                Spacer(Modifier.height(22.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -550,13 +551,14 @@ private fun FullPlayer(
                             )
                         }
                     }
-                    if (onAddToPlaylist != null) {
-                        IconButton(onClick = onAddToPlaylist) {
-                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Add to playlist")
+                    if (onMore != null) {
+                        IconButton(onClick = onMore) {
+                            Icon(Icons.Rounded.MoreHoriz, contentDescription = "More options")
                         }
                     }
                 }
 
+                Spacer(Modifier.height(18.dp))
                 Column {
                     val fraction = scrub
                         ?: if (duration > 0) (shownPosition.toFloat() / duration).coerceIn(0f, 1f) else 0f
@@ -580,6 +582,7 @@ private fun FullPlayer(
                     }
                 }
 
+                Spacer(Modifier.weight(1f))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -623,6 +626,7 @@ private fun FullPlayer(
                         )
                     }
                 }
+                Spacer(Modifier.weight(0.7f))
             }
         }
     }

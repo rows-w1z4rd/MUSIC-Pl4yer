@@ -60,6 +60,7 @@ import com.suna.player.ui.library.AddToPlaylistDialog
 import com.suna.player.ui.library.DeletePlaylistDialog
 import com.suna.player.ui.library.LibraryScreen
 import com.suna.player.ui.library.PlaylistNameDialog
+import com.suna.player.ui.library.SongDetailsSheet
 import com.suna.player.ui.library.SongListScreen
 import com.suna.player.ui.library.SongOptionsSheet
 import com.suna.player.ui.player.MiniPlayerSpace
@@ -175,6 +176,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
 
     var optionsFor by remember { mutableStateOf<OptionsTarget?>(null) }
     var addToPlaylist by remember { mutableStateOf<List<Song>?>(null) }
+    var detailsFor by remember { mutableStateOf<Song?>(null) }
     var newPlaylist by remember { mutableStateOf<NewPlaylistRequest?>(null) }
 
     // 0 = the player is a bar at the bottom, 1 = it fills the screen.
@@ -370,9 +372,9 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     scope.launch { expansion.snapTo(0f) }
                     nav.navigate(Routes.QUEUE) { launchSingleTop = true }
                 },
-                onAddToPlaylist = current.mediaId.toLongOrNull()
+                onMore = current.mediaId.toLongOrNull()
                     ?.let { songsById[it] }
-                    ?.let { song -> { addToPlaylist = listOf(song) } },
+                    ?.let { song -> { optionsFor = OptionsTarget(song, playlistId = null) } },
                 isFavorite = current?.mediaId?.toLongOrNull() in favoriteSet,
                 onToggleFavorite = current?.mediaId?.toLongOrNull()?.let { id -> { app.favorites.toggle(id) } },
             )
@@ -400,8 +402,16 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             onPlayNext = { player.playNext(listOf(song)) },
             onAddToQueue = { player.addToQueue(listOf(song)) },
             onAddToPlaylist = { addToPlaylist = listOf(song) },
-            onOpenAlbum = { nav.navigate("album/${song.albumId}") },
-            onOpenArtist = { nav.navigate("artist/${song.artistId}") },
+            // Leaving for another page also lowers the full screen player, if it was up.
+            onOpenAlbum = {
+                scope.launch { expansion.snapTo(0f) }
+                nav.navigate("album/${song.albumId}")
+            },
+            onOpenArtist = {
+                scope.launch { expansion.snapTo(0f) }
+                nav.navigate("artist/${song.artistId}")
+            },
+            onShowDetails = { detailsFor = song },
             onShare = { shareSongs(context, listOf(song)) },
             onDelete = { deleteSongs(listOf(song)) },
             onRemoveFromPlaylist = if (playlistId != null) {
@@ -411,6 +421,10 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             },
             onDismiss = { optionsFor = null },
         )
+    }
+
+    detailsFor?.let { song ->
+        SongDetailsSheet(song = song, plays = plays[song.id], onDismiss = { detailsFor = null })
     }
 
     addToPlaylist?.let { picked ->
