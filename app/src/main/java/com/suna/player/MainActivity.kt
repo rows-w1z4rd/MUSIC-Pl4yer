@@ -192,7 +192,9 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     var newPlaylist by remember { mutableStateOf<NewPlaylistRequest?>(null) }
 
     // 0 = the player is a bar at the bottom, 1 = it fills the screen.
-    val expansion = remember { Animatable(0f) }
+    // Bounded, so a fast flick settles exactly at open or closed instead of carrying the
+    // sheet past the top of the screen and springing back.
+    val expansion = remember { Animatable(0f).apply { updateBounds(0f, 1f) } }
     // The pages are the backdrop the glass player bar frosts.
     val haze = rememberHazeState()
     val current = playerState.current
