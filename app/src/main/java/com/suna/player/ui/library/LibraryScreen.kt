@@ -1,5 +1,9 @@
 package com.suna.player.ui.library
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.LocalContentColor
+import com.suna.player.ui.player.ShuffleGlyph
 import com.suna.player.ui.common.HintIconButton
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -71,7 +75,6 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -515,7 +518,12 @@ fun ListToolbar(
         )
         Spacer(Modifier.weight(1f))
         SquareButton(onClick = onShuffle) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle", modifier = Modifier.size(20.dp))
+            // The same crossed arrows as the player's shuffle button.
+            ShuffleGlyph(
+                on = true,
+                tint = LocalContentColor.current,
+                modifier = Modifier.size(20.dp).semantics { contentDescription = "Shuffle" },
+            )
         }
         SquareButton(onClick = onPlayAll, filled = true, modifier = Modifier.padding(start = 8.dp)) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = "Play all", modifier = Modifier.size(22.dp))
