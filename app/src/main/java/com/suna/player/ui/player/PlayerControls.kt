@@ -58,19 +58,23 @@ private fun DrawScope.line(color: Color, path: Path, width: Float = 1.8f) {
 }
 
 /**
- * Shuffle: two arrows. Off, they run almost side by side; turning shuffle on makes them swing
- * across each other, so the change of mode is visible, not just a change of color.
+ * Shuffle: two arrows crossing. When shuffle is off they cross less and a slash is drawn
+ * through them; turning it on swings them fully across and wipes the slash away.
  */
 @Composable
 fun ShuffleGlyph(on: Boolean, tint: Color, modifier: Modifier = Modifier) {
     val cross by animateFloatAsState(
-        targetValue = if (on) 1f else 0.25f,
+        targetValue = if (on) 1f else 0.55f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
         label = "shuffleCross",
     )
+    val slash by animateFloatAsState(
+        targetValue = if (on) 0f else 1f,
+        animationSpec = tween(220),
+        label = "shuffleSlash",
+    )
     Canvas(modifier.size(26.dp)) {
         inGrid {
-            // Where each arrow ends: crossed over when on, nearly level when off.
             val aEnd = lerp(16.5f, 7f, cross)
             val bEnd = lerp(7.5f, 17f, cross)
             val a = Path().apply {
@@ -93,13 +97,19 @@ fun ShuffleGlyph(on: Boolean, tint: Color, modifier: Modifier = Modifier) {
             }
             line(tint, a)
             line(tint, b)
+            if (slash > 0f) {
+                // Drawn from the top left down, so it wipes in and out.
+                val end = Offset(lerp(3f, 21f, slash), lerp(3f, 21f, slash))
+                drawLine(tint, Offset(3f, 3f), end, strokeWidth = 2f, cap = StrokeCap.Round)
+            }
         }
     }
 }
 
 /**
- * Repeat: a loop of two arrows, with a small 1 for "repeat this track". Each change of mode
- * spins the loop a full turn.
+ * Repeat, in three modes: off is an "A" over a straight arrow (play through once); repeat all
+ * puts the "A" inside a loop of two arrows; repeat one puts a "1" inside the loop. The loop
+ * spins a full turn on every change.
  */
 @Composable
 fun RepeatGlyph(mode: Int, tint: Color, modifier: Modifier = Modifier) {
@@ -112,6 +122,11 @@ fun RepeatGlyph(mode: Int, tint: Color, modifier: Modifier = Modifier) {
             spin.animateTo(spin.targetValue + 360f, spring(dampingRatio = 0.7f, stiffness = 260f))
         }
     }
+    val loop by animateFloatAsState(
+        targetValue = if (mode == Player.REPEAT_MODE_OFF) 0f else 1f,
+        animationSpec = tween(240),
+        label = "repeatLoop",
+    )
     val one by animateFloatAsState(
         targetValue = if (mode == Player.REPEAT_MODE_ONE) 1f else 0f,
         animationSpec = tween(220),
@@ -119,37 +134,72 @@ fun RepeatGlyph(mode: Int, tint: Color, modifier: Modifier = Modifier) {
     )
     Canvas(modifier.size(26.dp)) {
         inGrid {
-            rotate(spin.value, pivot = Offset(12f, 12f)) {
-                val top = Path().apply {
-                    moveTo(4.5f, 12.5f)
-                    lineTo(4.5f, 10f)
-                    quadraticTo(4.5f, 7f, 7.5f, 7f)
-                    lineTo(19f, 7f)
-                    moveTo(16.5f, 4.5f)
-                    lineTo(19f, 7f)
-                    lineTo(16.5f, 9.5f)
+            // Off: a large A over an arrow running straight through.
+            if (loop < 1f) {
+                val faded = tint.copy(alpha = tint.alpha * (1f - loop))
+                val bigA = Path().apply {
+                    moveTo(8.6f, 13f)
+                    lineTo(12f, 4.8f)
+                    lineTo(15.4f, 13f)
+                    moveTo(9.8f, 10.2f)
+                    lineTo(14.2f, 10.2f)
                 }
-                val bottom = Path().apply {
-                    moveTo(19.5f, 11.5f)
-                    lineTo(19.5f, 14f)
-                    quadraticTo(19.5f, 17f, 16.5f, 17f)
-                    lineTo(5f, 17f)
-                    moveTo(7.5f, 14.5f)
-                    lineTo(5f, 17f)
-                    lineTo(7.5f, 19.5f)
+                val arrow = Path().apply {
+                    moveTo(4.5f, 18f)
+                    lineTo(19.5f, 18f)
+                    moveTo(17f, 15.5f)
+                    lineTo(19.5f, 18f)
+                    lineTo(17f, 20.5f)
                 }
-                line(tint, top)
-                line(tint, bottom)
+                line(faded, bigA)
+                line(faded, arrow)
             }
-            if (one > 0f) {
-                // A small "1" in the middle of the loop, growing in.
-                scale(one, one, pivot = Offset(12f, 12f)) {
-                    val digit = Path().apply {
-                        moveTo(10.8f, 10.6f)
-                        lineTo(12.2f, 9.6f)
-                        lineTo(12.2f, 14.4f)
+            if (loop > 0f) {
+                val shown = tint.copy(alpha = tint.alpha * loop)
+                rotate(spin.value, pivot = Offset(12f, 12f)) {
+                    val top = Path().apply {
+                        moveTo(4.5f, 12.5f)
+                        lineTo(4.5f, 10f)
+                        quadraticTo(4.5f, 7f, 7.5f, 7f)
+                        lineTo(19f, 7f)
+                        moveTo(16.5f, 4.5f)
+                        lineTo(19f, 7f)
+                        lineTo(16.5f, 9.5f)
                     }
-                    line(tint, digit, width = 1.6f)
+                    val bottom = Path().apply {
+                        moveTo(19.5f, 11.5f)
+                        lineTo(19.5f, 14f)
+                        quadraticTo(19.5f, 17f, 16.5f, 17f)
+                        lineTo(5f, 17f)
+                        moveTo(7.5f, 14.5f)
+                        lineTo(5f, 17f)
+                        lineTo(7.5f, 19.5f)
+                    }
+                    line(shown, top)
+                    line(shown, bottom)
+                }
+                // In the loop: a small A for "all", a 1 for "this track".
+                if (one < 1f) {
+                    scale(1f - one, 1f - one, pivot = Offset(12f, 12f)) {
+                        val smallA = Path().apply {
+                            moveTo(10.3f, 14.2f)
+                            lineTo(12f, 9.8f)
+                            lineTo(13.7f, 14.2f)
+                            moveTo(10.9f, 12.7f)
+                            lineTo(13.1f, 12.7f)
+                        }
+                        line(shown, smallA, width = 1.5f)
+                    }
+                }
+                if (one > 0f) {
+                    scale(one, one, pivot = Offset(12f, 12f)) {
+                        val digit = Path().apply {
+                            moveTo(10.8f, 10.6f)
+                            lineTo(12.2f, 9.6f)
+                            lineTo(12.2f, 14.4f)
+                        }
+                        line(shown, digit, width = 1.6f)
+                    }
                 }
             }
         }

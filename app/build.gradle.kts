@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.media3.session)
 
     implementation(libs.coil.compose)
+    implementation(libs.haze)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

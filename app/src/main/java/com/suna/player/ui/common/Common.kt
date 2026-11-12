@@ -230,14 +230,14 @@ fun SongRow(
             )
         }
         if (selected == null) {
-            IconButton(onClick = onPlayNext) {
+            HintIconButton("Play next", onClick = onPlayNext) {
                 Icon(
                     Icons.AutoMirrored.Rounded.PlaylistAdd,
                     contentDescription = "Play ${song.title} next",
                     tint = colors.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onOptions) {
+            HintIconButton("More options", onClick = onOptions) {
                 Icon(
                     Icons.Rounded.MoreVert,
                     contentDescription = "Options for ${song.title}",

@@ -1,5 +1,10 @@
 package com.suna.player.ui.player
 
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeState
+import com.suna.player.ui.common.HintIconButton
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -123,8 +128,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 private val MiniHeight = 64.dp
-private val MiniMargin = 8.dp
-private val MiniCorner = 16.dp
+private val MiniMargin = 10.dp
+private val MiniCorner = 22.dp
 private val MiniArt = 44.dp
 private val MiniArtStart = 10.dp
 
@@ -179,6 +184,8 @@ fun PlayerSheet(
     state: PlayerUiState,
     player: PlayerConnection,
     expansion: Animatable<Float, AnimationVector1D>,
+    /** What's behind the bar, to frost it like glass. */
+    haze: HazeState,
     /** Opens the song menu for the playing song. */
     onMore: (() -> Unit)?,
     onAddToPlaylist: (() -> Unit)?,
@@ -234,8 +241,15 @@ fun PlayerSheet(
         }
         val flingSpeed = px(FlingSpeed)
 
-        val miniColor = if (hasWallpaper) colors.surfaceContainerHigh.copy(alpha = 0.92f) else colors.surfaceContainerHigh
-        val outline = borderColor()
+        // The bar is frosted glass: the list behind it shows through, blurred and tinted.
+        val light = LocalIsLight.current
+        val glass = HazeStyle(
+            backgroundColor = colors.background,
+            tints = listOf(HazeTint(if (light) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.08f))),
+            blurRadius = 24.dp,
+            noiseFactor = 0.04f,
+        )
+        val edge = if (light) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.22f)
 
         Box(
             Modifier
@@ -252,14 +266,15 @@ fun PlayerSheet(
                     )
                     clip = true
                 }
-                .drawBehind { drawRect(lerp(miniColor, stage.background, expansion.value)) }
+                .hazeEffect(haze, glass) { blurEnabled = expansion.value < 0.35f }
+                .drawBehind { drawRect(stage.background.copy(alpha = expansion.value)) }
                 .drawWithContent {
                     drawContent()
                     val p = expansion.value
                     if (p < 0.2f) {
                         val inset = px(MiniMargin)
                         drawRoundRect(
-                            color = outline.copy(alpha = outline.alpha * (1f - p / 0.2f)),
+                            color = edge.copy(alpha = edge.alpha * (1f - p / 0.2f)),
                             topLeft = Offset(inset, 0f),
                             size = Size(size.width - 2 * inset, px(MiniHeight)),
                             cornerRadius = CornerRadius(px(MiniCorner)),
@@ -436,14 +451,14 @@ private fun MiniBar(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = player::togglePlay) {
+            HintIconButton(if (state.isPlaying) "Pause" else "Play", onClick = player::togglePlay) {
                 Icon(
                     if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (state.isPlaying) "Pause" else "Play",
                     modifier = Modifier.size(30.dp),
                 )
             }
-            IconButton(onClick = player::next) {
+            HintIconButton("Next track", onClick = player::next) {
                 Icon(Icons.Rounded.SkipNext, contentDescription = "Next song")
             }
         }
@@ -526,12 +541,12 @@ private fun FullPlayer(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().height(TopBarHeight).padding(horizontal = 8.dp),
             ) {
-                IconButton(onClick = onCollapse) {
+                HintIconButton("Minimize player", onClick = onCollapse) {
                     Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Minimize player", modifier = Modifier.size(32.dp))
                 }
                 Spacer(Modifier.weight(1f))
                 if (onMore != null) {
-                    IconButton(onClick = onMore) {
+                    HintIconButton("More options", onClick = onMore) {
                         Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
                     }
                 }
@@ -584,7 +599,7 @@ private fun FullPlayer(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 ) {
-                    IconButton(onClick = onToggleQueue) {
+                    HintIconButton(if (queueOpen) "Hide queue" else "Show queue", onClick = onToggleQueue) {
                         Icon(
                             Icons.AutoMirrored.Rounded.QueueMusic,
                             contentDescription = if (queueOpen) "Hide queue" else "Show queue",
@@ -597,7 +612,7 @@ private fun FullPlayer(
                             animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium),
                             label = "heart",
                         )
-                        IconButton(onClick = onToggleFavorite) {
+                        HintIconButton(if (isFavorite) "In your favorites" else "Add to favorites", onClick = onToggleFavorite) {
                             Icon(
                                 if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
@@ -610,7 +625,7 @@ private fun FullPlayer(
                             )
                         }
                     }
-                    IconButton(onClick = { onAddToPlaylist?.invoke() }, enabled = onAddToPlaylist != null) {
+                    HintIconButton("Add to playlist", onClick = { onAddToPlaylist?.invoke() }, enabled = onAddToPlaylist != null) {
                         Icon(Icons.Rounded.Add, contentDescription = "Add to playlist")
                     }
                 }
@@ -642,7 +657,7 @@ private fun FullPlayer(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 26.dp),
                 ) {
-                    IconButton(onClick = player::toggleShuffle) {
+                    HintIconButton(if (state.shuffle) "Shuffle is on" else "Shuffle is off", onClick = player::toggleShuffle) {
                         ShuffleGlyph(on = state.shuffle, tint = if (state.shuffle) accent else stage.dim)
                     }
                     // Tap for the previous track; hold to rewind 5 seconds at a time.
@@ -682,7 +697,14 @@ private fun FullPlayer(
                     ) {
                         Icon(Icons.Rounded.SkipNext, contentDescription = null, modifier = Modifier.size(40.dp))
                     }
-                    IconButton(onClick = player::cycleRepeat) {
+                    HintIconButton(
+                        when (state.repeatMode) {
+                            Player.REPEAT_MODE_ONE -> "Repeating this track"
+                            Player.REPEAT_MODE_ALL -> "Repeating all tracks"
+                            else -> "Repeat is off: plays to the end"
+                        },
+                        onClick = player::cycleRepeat,
+                    ) {
                         RepeatGlyph(
                             mode = state.repeatMode,
                             tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) accent else stage.dim,

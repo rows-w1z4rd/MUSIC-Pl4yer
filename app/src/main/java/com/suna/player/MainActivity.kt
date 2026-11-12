@@ -1,5 +1,7 @@
 package com.suna.player
 
+import dev.chrisbanes.haze.rememberHazeState
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.geometry.Rect
 import com.suna.player.ui.library.SongMenuTarget
 import com.suna.player.ui.library.SongContextMenu
@@ -190,6 +192,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
 
     // 0 = the player is a bar at the bottom, 1 = it fills the screen.
     val expansion = remember { Animatable(0f) }
+    // The pages are the backdrop the glass player bar frosts.
+    val haze = rememberHazeState()
     val current = playerState.current
     val selection = remember { SongSelection() }
     val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER && !selection.active
@@ -210,7 +214,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             NavHost(
                 navController = nav,
                 startDestination = Routes.LIBRARY,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().hazeSource(haze),
             ) {
                 composable(Routes.LIBRARY) {
                     LibraryScreen(
@@ -378,6 +382,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 state = playerState,
                 player = player,
                 expansion = expansion,
+                haze = haze,
                 onMore = current.mediaId.toLongOrNull()
                     ?.let { songsById[it] }
                     ?.let { song -> { optionsFor = OptionsTarget(song, playlistId = null) } },

@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.HintIconButton
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.snapshotFlow
@@ -172,7 +173,7 @@ fun LibraryScreen(
     val listPadding = PaddingValues(top = 6.dp, bottom = bottomSpace + 8.dp)
 
     val icons: @Composable () -> Unit = {
-        IconButton(onClick = {
+        HintIconButton(if (searching) "Close search" else "Search", onClick = {
             searching = !searching
             if (!searching) query = ""
         }) {
@@ -183,7 +184,7 @@ fun LibraryScreen(
         }
         Box {
             var menuOpen by remember { mutableStateOf(false) }
-            IconButton(onClick = { menuOpen = true }) {
+            HintIconButton("More options", onClick = { menuOpen = true }) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
             }
             val onSongPage = searching ||
