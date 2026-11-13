@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.snapshotFlow
 import android.content.Context
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.runtime.mutableIntStateOf
@@ -376,33 +375,10 @@ internal fun TabBar(
                     val accent = colors.primary
                     val lineHeight = 2.5.dp.toPx()
                     val lineTop = spot.bottom + 5.dp.toPx()
-                    // The line is a little shorter than the name; its light fans out as it rises
-                    // (left side like a backslash, right like a slash) and stops exactly at the
-                    // name's edges, gone halfway up the word.
-                    val glowTop = spot.top + (spot.bottom - spot.top) * 0.5f
+                    // An accent line under the name, a little shorter than it.
                     val spread = (spot.right - spot.left) * 0.14f
                     val lineLeft = spot.left + spread
                     val lineRight = spot.right - spread
-                    val layers = 6
-                    val brush = Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.5f to accent.copy(alpha = 0.035f),
-                        1f to accent.copy(alpha = 0.09f),
-                        startY = glowTop,
-                        endY = lineTop,
-                    )
-                    // Stacked, ever narrower beams: bright in the middle, soft at the sides.
-                    repeat(layers) { k ->
-                        val inset = spread * k / layers
-                        val beam = Path().apply {
-                            moveTo(lineLeft, lineTop)
-                            lineTo(spot.left + inset, glowTop)
-                            lineTo(spot.right - inset, glowTop)
-                            lineTo(lineRight, lineTop)
-                            close()
-                        }
-                        drawPath(beam, brush)
-                    }
                     drawRoundRect(
                         color = accent,
                         topLeft = Offset(lineLeft, lineTop),
