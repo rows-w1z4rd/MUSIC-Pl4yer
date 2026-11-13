@@ -45,14 +45,13 @@ screen widget, and play counts kept on the device.
 ## Screens
 
 <p align="center">
-  <img src="docs/screenshots/04-queue.webp" width="24%" alt="Queue inside the player" />
-  <img src="docs/screenshots/05-settings.webp" width="24%" alt="Settings" />
-  <img src="docs/screenshots/06-wallpaper.webp" width="24%" alt="Library over a wallpaper, with its colors" />
-  <img src="docs/screenshots/07-wallpaper-preview.webp" width="24%" alt="Wallpaper preview with blurred edges" />
+  <img src="docs/screenshots/04-queue.webp" width="32%" alt="Queue inside the player" />
+  <img src="docs/screenshots/05-settings.webp" width="32%" alt="Settings" />
+  <img src="docs/screenshots/06-wallpaper.webp" width="32%" alt="Library over a wallpaper, with its colors" />
 </p>
 
-<sub>Wallpaper in the last two screenshots: Edward Burne-Jones, <i>The Beguiling of Merlin</i> (1874), public
-domain, via Wikimedia Commons. The tracks are generated demo files.</sub>
+<sub>Wallpaper in the last screenshot: Edward Burne-Jones, <i>The Beguiling of Merlin</i> (1874), public domain,
+via Wikimedia Commons. The tracks are generated demo files.</sub>
 
 ---
 
