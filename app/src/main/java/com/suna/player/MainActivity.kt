@@ -1,5 +1,6 @@
 package com.suna.player
 
+import com.suna.player.ui.common.NoticeHost
 import com.suna.player.ui.common.PageSlide
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInHorizontally
@@ -440,6 +441,13 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 onToggleFavorite = current?.mediaId?.toLongOrNull()?.let { id -> { app.favorites.toggle(id) } },
             )
         }
+
+        // Short messages (such as "Playing 8 tracks") float just above the mini player.
+        NoticeHost(
+            messages = player.notices,
+            aboveBottom = if (showPlayer) MiniPlayerSpace else 0.dp,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
 
         pressed?.let { target ->
             val song = target.song

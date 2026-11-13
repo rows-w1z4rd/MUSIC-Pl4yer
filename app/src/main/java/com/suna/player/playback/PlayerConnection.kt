@@ -1,8 +1,10 @@
 package com.suna.player.playback
 
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import androidx.media3.session.SessionCommand
 import android.os.Bundle
-import android.widget.Toast
 import java.text.NumberFormat
 import android.content.ComponentName
 import android.content.Context
@@ -56,6 +58,10 @@ class PlayerConnection(private val context: Context) {
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
+
+    /** Short messages for the user, shown by the app just above the mini player. */
+    private val _notices = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val notices: SharedFlow<String> = _notices.asSharedFlow()
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -137,7 +143,7 @@ class PlayerConnection(private val context: Context) {
             val count = NumberFormat.getIntegerInstance().format(songs.size)
             val what = if (songs.size == 1) "1 track" else "$count tracks"
             val message = if (c.shuffleModeEnabled) "Playing $what in shuffle" else "Playing $what"
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            _notices.tryEmit(message)
         }
     }
 

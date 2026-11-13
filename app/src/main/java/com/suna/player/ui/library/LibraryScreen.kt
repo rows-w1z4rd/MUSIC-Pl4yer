@@ -824,5 +824,5 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 private const val LAST_TAB = "last_tab"
 private const val SONG_SORT = "song_sort"
 
-/** Play-all button style being tried out: false = accent outline (G2), true = solid (G3). */
-private const val PlayAllFilled = false
+/** The play-all mark: solid and softly rounded (G3); false gives the outlined version (G2). */
+private const val PlayAllFilled = true
