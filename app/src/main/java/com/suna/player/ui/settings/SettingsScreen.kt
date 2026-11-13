@@ -1,13 +1,6 @@
 package com.suna.player.ui.settings
 
-import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.NonCancellable
 import com.suna.player.ui.common.PageSlide
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.SeekableTransitionState
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
 import com.suna.player.ui.theme.on
@@ -143,31 +136,18 @@ fun SettingsScreen(
     var page by rememberSaveable { mutableStateOf(Page.MAIN) }
     val save = rememberSave(settings)
 
-    // A back swipe from a sub-page drags it to the right with the finger while the main page
-    // comes in from the left; letting go finishes the slide, cancelling slides it back.
-    val pages = remember { SeekableTransitionState(page) }
-    var swiping by remember { mutableStateOf(false) }
-    LaunchedEffect(page) { if (!swiping && pages.currentState != page) pages.animateTo(page) }
-    PredictiveBackHandler(enabled = page != Page.MAIN) { progress ->
-        swiping = true
-        try {
-            progress.collect { event -> pages.seekTo(event.progress, targetState = Page.MAIN) }
-            pages.animateTo(Page.MAIN)
-            page = Page.MAIN
-        } catch (e: CancellationException) {
-            withContext(NonCancellable) { pages.animateTo(pages.currentState) }
-            throw e
-        } finally {
-            swiping = false
-        }
-    }
+    // Like Samsung: a back swipe from a sub-page leaves it still while held, and it slides away
+    // to the right (the main page coming in from the left) once the finger is let go.
+    BackHandler(enabled = page != Page.MAIN) { page = Page.MAIN }
 
-    rememberTransition(pages, label = "settingsPage").AnimatedContent(
+    AnimatedContent(
+        targetState = page,
         transitionSpec = {
             val forward = targetState != Page.MAIN
             slideInHorizontally(PageSlide) { if (forward) it else -it }
                 .togetherWith(slideOutHorizontally(PageSlide) { if (forward) -it else it })
         },
+        label = "settingsPage",
     ) { shown ->
         SettingsPage(
             title = shown.title,

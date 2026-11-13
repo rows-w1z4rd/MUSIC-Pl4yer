@@ -218,9 +218,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             LocalSongSelection provides selection,
             LocalSongLongPress provides onLongPress,
         ) {
-            // Pages slide side by side, never fading: going back, the page follows the finger
-            // to the right while the one before comes in from the left, and slides back if the
-            // gesture is cancelled. The pages never overlap, so the wallpaper stays still.
+            // Pages slide side by side, never fading, and never overlap, so the wallpaper stays
+            // still behind them.
             NavHost(
                 navController = nav,
                 startDestination = Routes.LIBRARY,
@@ -229,9 +228,6 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 exitTransition = { slideOutHorizontally(PageSlide) { -it } },
                 popEnterTransition = { slideInHorizontally(PageSlide) { -it } },
                 popExitTransition = { slideOutHorizontally(PageSlide) { it } },
-                // The same slide while a back swipe is in progress (the default shrinks the page).
-                predictivePopEnterTransition = { slideInHorizontally(PageSlide) { -it } },
-                predictivePopExitTransition = { slideOutHorizontally(PageSlide) { it } },
             ) {
                 composable(Routes.LIBRARY) {
                     LibraryScreen(
@@ -397,6 +393,13 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 }
             }
         }
+
+        // Like Samsung's own apps, a back swipe doesn't drag the page: it stays still while the
+        // swipe is held (only the system's back arrow shows), and slides away once the finger
+        // is let go. Declared after the NavHost, so it answers Back instead of the NavHost's
+        // own finger-following handler; pages that handle Back themselves (inside Settings,
+        // the wallpaper preview) are added later and still come first.
+        BackHandler(enabled = route != null && route != Routes.LIBRARY) { nav.popBackStack() }
 
         // Declared after the NavHost so they get Back before page navigation does: Back first
         // closes the full screen player or ends picking songs, then leaves the page.
