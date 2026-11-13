@@ -225,31 +225,33 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 startDestination = Routes.LIBRARY,
                 modifier = Modifier.fillMaxSize().hazeSource(haze),
                 enterTransition = { slideInHorizontally(PageSlide) { it } },
-                exitTransition = { slideOutHorizontally(PageSlide) { -it } },
-                popEnterTransition = { slideInHorizontally(PageSlide) { -it } },
+                exitTransition = { slideOutHorizontally(PageSlide) { -it / 4 } },
+                popEnterTransition = { slideInHorizontally(PageSlide) { -it / 4 } },
                 popExitTransition = { slideOutHorizontally(PageSlide) { it } },
             ) {
                 composable(Routes.LIBRARY) {
-                    LibraryScreen(
-                        songs = songs,
-                        loaded = loaded,
-                        headerText = appearance.headerText,
-                        tabs = appearance.tabs,
-                        plays = plays,
-                        favorites = favorites,
-                        playlists = playlists,
-                        onPlay = { list, index -> player.play(list, index) },
-                        onShuffle = { player.shuffleAll(it) },
-                        onPlayNext = playNext,
-                        onSongOptions = openSongOptions,
-                        onOpenAlbum = { nav.navigate("album/$it") },
-                        onOpenArtist = { nav.navigate("artist/$it") },
-                        onOpenFolder = { nav.navigate("folder/${Uri.encode(it)}") },
-                        onOpenPlaylist = { nav.navigate("playlist/$it") },
-                        onNewPlaylist = { newPlaylist = NewPlaylistRequest(emptyList()) },
-                        onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
-                        onStartSelection = selection::startEmpty,
-                    )
+                    AppBackground(wallpaper, appearance) {
+                        LibraryScreen(
+                            songs = songs,
+                            loaded = loaded,
+                            headerText = appearance.headerText,
+                            tabs = appearance.tabs,
+                            plays = plays,
+                            favorites = favorites,
+                            playlists = playlists,
+                            onPlay = { list, index -> player.play(list, index) },
+                            onShuffle = { player.shuffleAll(it) },
+                            onPlayNext = playNext,
+                            onSongOptions = openSongOptions,
+                            onOpenAlbum = { nav.navigate("album/$it") },
+                            onOpenArtist = { nav.navigate("artist/$it") },
+                            onOpenFolder = { nav.navigate("folder/${Uri.encode(it)}") },
+                            onOpenPlaylist = { nav.navigate("playlist/$it") },
+                            onNewPlaylist = { newPlaylist = NewPlaylistRequest(emptyList()) },
+                            onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+                            onStartSelection = selection::startEmpty,
+                        )
+                    }
                 }
                 composable(
                     Routes.ALBUM,
@@ -259,15 +261,17 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     val albumSongs = remember(songs, id) {
                         songs.filter { it.albumId == id }.sortedBy { it.track }
                     }
-                    SongListScreen(
-                        title = albumSongs.firstOrNull()?.album ?: "Album",
-                        songs = albumSongs,
-                        onBack = { nav.popBackStack() },
-                        onPlay = { player.play(albumSongs, it) },
-                        onShuffle = { player.shuffleAll(albumSongs) },
-                        onPlayNext = playNext,
-                        onSongOptions = openSongOptions,
-                    )
+                    AppBackground(wallpaper, appearance) {
+                        SongListScreen(
+                            title = albumSongs.firstOrNull()?.album ?: "Album",
+                            songs = albumSongs,
+                            onBack = { nav.popBackStack() },
+                            onPlay = { player.play(albumSongs, it) },
+                            onShuffle = { player.shuffleAll(albumSongs) },
+                            onPlayNext = playNext,
+                            onSongOptions = openSongOptions,
+                        )
+                    }
                 }
                 composable(
                     Routes.ARTIST,
@@ -275,15 +279,17 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 ) { entry ->
                     val id = entry.arguments?.getLong("id") ?: -1L
                     val artistSongs = remember(songs, id) { songs.filter { it.artistId == id } }
-                    SongListScreen(
-                        title = artistSongs.firstOrNull()?.artist ?: "Artist",
-                        songs = artistSongs,
-                        onBack = { nav.popBackStack() },
-                        onPlay = { player.play(artistSongs, it) },
-                        onShuffle = { player.shuffleAll(artistSongs) },
-                        onPlayNext = playNext,
-                        onSongOptions = openSongOptions,
-                    )
+                    AppBackground(wallpaper, appearance) {
+                        SongListScreen(
+                            title = artistSongs.firstOrNull()?.artist ?: "Artist",
+                            songs = artistSongs,
+                            onBack = { nav.popBackStack() },
+                            onPlay = { player.play(artistSongs, it) },
+                            onShuffle = { player.shuffleAll(artistSongs) },
+                            onPlayNext = playNext,
+                            onSongOptions = openSongOptions,
+                        )
+                    }
                 }
                 composable(
                     Routes.FOLDER,
@@ -291,15 +297,17 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 ) { entry ->
                     val path = entry.arguments?.getString("path").orEmpty()
                     val folderSongs = remember(songs, path) { songs.filter { it.folder == path } }
-                    SongListScreen(
-                        title = path.trimEnd('/').substringAfterLast('/').ifEmpty { "Phone" },
-                        songs = folderSongs,
-                        onBack = { nav.popBackStack() },
-                        onPlay = { player.play(folderSongs, it) },
-                        onShuffle = { player.shuffleAll(folderSongs) },
-                        onPlayNext = playNext,
-                        onSongOptions = openSongOptions,
-                    )
+                    AppBackground(wallpaper, appearance) {
+                        SongListScreen(
+                            title = path.trimEnd('/').substringAfterLast('/').ifEmpty { "Phone" },
+                            songs = folderSongs,
+                            onBack = { nav.popBackStack() },
+                            onPlay = { player.play(folderSongs, it) },
+                            onShuffle = { player.shuffleAll(folderSongs) },
+                            onPlayNext = playNext,
+                            onSongOptions = openSongOptions,
+                        )
+                    }
                 }
                 composable(
                     Routes.PLAYLIST,
@@ -313,23 +321,27 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     var renaming by remember { mutableStateOf(false) }
                     var deleting by remember { mutableStateOf(false) }
 
-                    SongListScreen(
-                        title = playlist?.name ?: "Playlist",
-                        songs = playlistSongs,
-                        onBack = { nav.popBackStack() },
-                        onPlay = { player.play(playlistSongs, it) },
-                        onShuffle = { player.shuffleAll(playlistSongs) },
-                        onPlayNext = playNext,
-                        onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
-                        actions = {
-                            IconButton(onClick = { renaming = true }) {
-                                Icon(Icons.Rounded.Edit, contentDescription = "Rename playlist")
-                            }
-                            IconButton(onClick = { deleting = true }) {
-                                Icon(Icons.Rounded.Delete, contentDescription = "Delete playlist")
-                            }
-                        },
-                    )
+                    AppBackground(wallpaper, appearance) {
+
+                        SongListScreen(
+                            title = playlist?.name ?: "Playlist",
+                            songs = playlistSongs,
+                            onBack = { nav.popBackStack() },
+                            onPlay = { player.play(playlistSongs, it) },
+                            onShuffle = { player.shuffleAll(playlistSongs) },
+                            onPlayNext = playNext,
+                            onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
+                            actions = {
+                                IconButton(onClick = { renaming = true }) {
+                                    Icon(Icons.Rounded.Edit, contentDescription = "Rename playlist")
+                                }
+                                IconButton(onClick = { deleting = true }) {
+                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete playlist")
+                                }
+                            },
+                        )
+
+                    }
 
                     if (renaming && playlist != null) {
                         PlaylistNameDialog(
@@ -352,27 +364,31 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     }
                 }
                 composable(Routes.QUEUE) {
-                    QueueScreen(
-                        state = playerState,
-                        onBack = { nav.popBackStack() },
-                        onPlayIndex = player::playQueueItem,
-                        onRemove = player::removeFromQueue,
-                    )
+                    AppBackground(wallpaper, appearance) {
+                        QueueScreen(
+                            state = playerState,
+                            onBack = { nav.popBackStack() },
+                            onPlayIndex = player::playQueueItem,
+                            onRemove = player::removeFromQueue,
+                        )
+                    }
                 }
                 composable(Routes.SETTINGS) {
-                    SettingsScreen(
-                        appearance = appearance,
-                        skipSilence = skipSilence,
-                        wallpaper = wallpaper,
-                        settings = app.settings,
-                        wallpapers = app.wallpapers,
-                        onBack = { nav.popBackStack() },
-                        onWallpaperPreview = { newPicture ->
-                            nav.navigate(if (newPicture) Routes.WALLPAPER_NEW else Routes.WALLPAPER) {
-                                launchSingleTop = true
-                            }
-                        },
-                    )
+                    AppBackground(wallpaper, appearance) {
+                        SettingsScreen(
+                            appearance = appearance,
+                            skipSilence = skipSilence,
+                            wallpaper = wallpaper,
+                            settings = app.settings,
+                            wallpapers = app.wallpapers,
+                            onBack = { nav.popBackStack() },
+                            onWallpaperPreview = { newPicture ->
+                                nav.navigate(if (newPicture) Routes.WALLPAPER_NEW else Routes.WALLPAPER) {
+                                    launchSingleTop = true
+                                }
+                            },
+                        )
+                    }
                 }
                 for (newPicture in listOf(false, true)) {
                     composable(if (newPicture) Routes.WALLPAPER_NEW else Routes.WALLPAPER) {

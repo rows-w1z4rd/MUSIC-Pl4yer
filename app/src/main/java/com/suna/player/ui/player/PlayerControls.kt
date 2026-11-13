@@ -59,6 +59,46 @@ private fun DrawScope.line(color: Color, path: Path, width: Float = 1.8f) {
 }
 
 /**
+ * Play, in the style of an IDE's run button: a triangle with softly rounded corners, drawn with
+ * the same stroke as the shuffle arrows so the two read as a set. [filled] makes it solid.
+ */
+@Composable
+fun PlayGlyph(tint: Color, modifier: Modifier = Modifier, filled: Boolean = false) {
+    Canvas(modifier.size(26.dp)) {
+        inGrid {
+            val path = roundedTriangle(Offset(7.2f, 4.8f), Offset(7.2f, 19.2f), Offset(19.6f, 12f), corner = 2.6f)
+            if (filled) {
+                drawPath(path, tint)
+                line(tint, path, width = 1.1f)
+            } else {
+                line(tint, path)
+            }
+        }
+    }
+}
+
+/** A closed triangle whose corners are cut back by [corner] units and joined with a curve. */
+private fun roundedTriangle(a: Offset, b: Offset, c: Offset, corner: Float): Path {
+    val pts = listOf(a, b, c)
+    fun toward(from: Offset, to: Offset): Offset {
+        val v = to - from
+        return from + v * (corner / v.getDistance())
+    }
+    return Path().apply {
+        pts.indices.forEach { i ->
+            val prev = pts[(i + 2) % 3]
+            val at = pts[i]
+            val next = pts[(i + 1) % 3]
+            val inPt = toward(at, prev)
+            val outPt = toward(at, next)
+            if (i == 0) moveTo(inPt.x, inPt.y) else lineTo(inPt.x, inPt.y)
+            quadraticTo(at.x, at.y, outPt.x, outPt.y)
+        }
+        close()
+    }
+}
+
+/**
  * Shuffle: two arrows crossing. When shuffle is off a slash is drawn through them; turning it
  * on wipes the slash away with a small pop.
  */

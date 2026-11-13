@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.playback.PlayerConnection
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
@@ -49,9 +50,8 @@ fun SongListScreen(
                         ListToolbar(
                             label = null,
                             count = songs.size,
-                            onLabel = null,
                             onShuffle = onShuffle,
-                            onPlayAll = { onPlay(0) },
+                            onPlayAll = { onPlay(PlayerConnection.PLAY_ALL) },
                         )
                     },
                 )

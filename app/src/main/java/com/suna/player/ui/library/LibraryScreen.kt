@@ -1,9 +1,13 @@
 package com.suna.player.ui.library
 
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.LocalContentColor
 import com.suna.player.ui.player.ShuffleGlyph
+import com.suna.player.ui.player.PlayGlyph
+import com.suna.player.playback.PlayerConnection
 import com.suna.player.ui.common.HintIconButton
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -455,25 +459,31 @@ private fun SongsPage(
             ListToolbar(
                 label = sort.label,
                 count = songs.size,
-                onLabel = {
-                    sort = SongSort.entries[(sort.ordinal + 1) % SongSort.entries.size]
+                sortOptions = SongSort.entries.map { it.label },
+                onSort = { picked ->
+                    sort = SongSort.entries[picked]
                     uiPrefs.edit().putString(SONG_SORT, sort.name).apply()
                 },
                 onShuffle = { onShuffle(sorted) },
-                onPlayAll = { onPlay(sorted, 0) },
+                onPlayAll = { onPlay(sorted, PlayerConnection.PLAY_ALL) },
             )
         },
     )
 }
 
-/** Sort toggle on the left, song count, then shuffle and play-all on the right. */
+/**
+ * The row above a list. On the left, Samsung-style: its sort mark and the current order in
+ * bold grey, opening a menu of orders when tapped (lists without an order show their track
+ * count instead). On the right, shuffle and play-all.
+ */
 @Composable
 fun ListToolbar(
     label: String?,
     count: Int,
-    onLabel: (() -> Unit)?,
     onShuffle: () -> Unit,
     onPlayAll: () -> Unit,
+    sortOptions: List<String> = emptyList(),
+    onSort: ((Int) -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(
@@ -481,39 +491,119 @@ fun ListToolbar(
         modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 10.dp, bottom = 4.dp),
     ) {
         if (label != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .then(if (onLabel != null) Modifier.clickable(onClick = onLabel) else Modifier)
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.Sort,
-                    contentDescription = null,
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(label, style = SmallLabel, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+            val grey = colors.onSurface.copy(alpha = 0.75f)
+            var menuOpen by remember { mutableStateOf(false) }
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .then(if (onSort != null) Modifier.clickable { menuOpen = true } else Modifier)
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                ) {
+                    SortMark(grey, Modifier.size(width = 24.dp, height = 18.dp))
+                    Text(
+                        label,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = grey,
+                        modifier = Modifier.padding(start = 11.dp),
+                    )
+                }
+                if (onSort != null) {
+                    SortMenu(
+                        expanded = menuOpen,
+                        options = sortOptions,
+                        selected = sortOptions.indexOf(label),
+                        onPick = { menuOpen = false; onSort(it) },
+                        onDismiss = { menuOpen = false },
+                    )
+                }
             }
-        }
-        Text(
-            if (label == null) songCount(count) else "$count",
-            style = SmallLabel,
-            color = colors.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.padding(start = 6.dp),
-        )
-        Spacer(Modifier.weight(1f))
-        SquareButton(onClick = onShuffle) {
-            // The same crossed arrows as the player's shuffle button.
-            ShuffleGlyph(
-                on = true,
-                tint = LocalContentColor.current,
-                modifier = Modifier.size(20.dp).semantics { contentDescription = "Shuffle" },
+        } else {
+            Text(
+                songCount(count),
+                style = SmallLabel,
+                color = colors.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(start = 12.dp),
             )
         }
-        SquareButton(onClick = onPlayAll, filled = true, modifier = Modifier.padding(start = 8.dp)) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = "Play all", modifier = Modifier.size(22.dp))
+        Spacer(Modifier.weight(1f))
+        // No button backgrounds: our shuffle arrows, then an IDE-style play in the accent colour.
+        HintIconButton("Shuffle", onClick = onShuffle) {
+            ShuffleGlyph(
+                on = true,
+                tint = colors.onSurface,
+                modifier = Modifier.size(28.dp).semantics { contentDescription = "Shuffle" },
+            )
+        }
+        HintIconButton("Play all", onClick = onPlayAll, modifier = Modifier.padding(start = 4.dp)) {
+            PlayGlyph(
+                tint = colors.primary,
+                filled = PlayAllFilled,
+                modifier = Modifier.size(28.dp).semantics { contentDescription = "Play all" },
+            )
+        }
+    }
+}
+
+/**
+ * Samsung's sort mark, traced from their app: a thin down arrow whose tip is a single stroke
+ * on the left, beside three left-aligned lines getting shorter. Drawn on a 33 x 25 grid.
+ */
+@Composable
+private fun SortMark(tint: Color, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val u = size.width / 33f
+        val w = 2f * u
+        fun line(x1: Float, y1: Float, x2: Float, y2: Float, cap: StrokeCap = StrokeCap.Butt) =
+            drawLine(tint, Offset(x1 * u, y1 * u), Offset(x2 * u, y2 * u), strokeWidth = w, cap = cap)
+        line(4.5f, 0.5f, 4.5f, 24f, StrokeCap.Round)        // arrow shaft
+        line(0.6f, 19.9f, 4.5f, 24f, StrokeCap.Round)       // arrow tip, left side only
+        line(11.5f, 1.8f, 32.5f, 1.8f)                      // long line
+        line(11.5f, 12.5f, 23.5f, 12.5f)                    // medium line
+        line(11.5f, 23f, 20.5f, 23f)                        // short line
+    }
+}
+
+/** Samsung-style list of orders: rounded card, the current one in the accent with a check. */
+@Composable
+private fun SortMenu(
+    expanded: Boolean,
+    options: List<String>,
+    selected: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(26.dp),
+        containerColor = colors.surfaceContainerHigh,
+        // Opens over the label, as Samsung's does, rather than below it.
+        offset = DpOffset(x = 0.dp, y = (-44).dp),
+        modifier = Modifier.widthIn(min = 220.dp),
+    ) {
+        options.forEachIndexed { i, option ->
+            val on = i == selected
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        option,
+                        fontSize = 17.sp,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (on) colors.primary else colors.onSurface,
+                    )
+                },
+                trailingIcon = if (on) {
+                    { Icon(Icons.Rounded.Check, contentDescription = "Current order", tint = colors.primary) }
+                } else {
+                    null
+                },
+                onClick = { onPick(i) },
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
+            )
         }
     }
 }
@@ -574,9 +664,8 @@ private fun FavoritesPage(
             ListToolbar(
                 label = null,
                 count = list.size,
-                onLabel = null,
                 onShuffle = { onShuffle(list) },
-                onPlayAll = { onPlay(list, 0) },
+                onPlayAll = { onPlay(list, PlayerConnection.PLAY_ALL) },
             )
         },
     )
@@ -734,3 +823,6 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 
 private const val LAST_TAB = "last_tab"
 private const val SONG_SORT = "song_sort"
+
+/** Play-all button style being tried out: false = accent outline (G2), true = solid (G3). */
+private const val PlayAllFilled = false

@@ -2,6 +2,8 @@ package com.suna.player.playback
 
 import androidx.media3.session.SessionCommand
 import android.os.Bundle
+import android.widget.Toast
+import java.text.NumberFormat
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
@@ -43,6 +45,11 @@ data class PlayerUiState(
  * when it is not, so nothing stays bound in the background.
  */
 class PlayerConnection(private val context: Context) {
+
+    companion object {
+        /** Start index meaning "the play button above a list": see [play]. */
+        const val PLAY_ALL = -1
+    }
 
     private var controller: MediaController? = null
     private var future: ListenableFuture<MediaController>? = null
@@ -110,12 +117,28 @@ class PlayerConnection(private val context: Context) {
 
     // --- Starting playback ---
 
+    /**
+     * Plays [songs] from [startIndex]. With [PLAY_ALL] (the play button above a list) it works
+     * like Samsung's: with shuffle on it starts on a random track, so every press brings a new
+     * song, and with shuffle off it starts at the top; a short message says how many tracks.
+     */
     fun play(songs: List<Song>, startIndex: Int) {
         val c = controller ?: return
         if (songs.isEmpty()) return
-        c.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(0, songs.lastIndex), 0L)
+        val start = when {
+            startIndex != PLAY_ALL -> startIndex.coerceIn(0, songs.lastIndex)
+            c.shuffleModeEnabled -> songs.indices.random()
+            else -> 0
+        }
+        c.setMediaItems(songs.map { it.toMediaItem() }, start, 0L)
         c.prepare()
         c.play()
+        if (startIndex == PLAY_ALL) {
+            val count = NumberFormat.getIntegerInstance().format(songs.size)
+            val what = if (songs.size == 1) "1 track" else "$count tracks"
+            val message = if (c.shuffleModeEnabled) "Playing $what in shuffle" else "Playing $what"
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun shuffleAll(songs: List<Song>) = play(songs.shuffled(), 0)

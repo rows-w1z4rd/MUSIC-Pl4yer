@@ -356,7 +356,7 @@ private fun LibraryMock(look: Appearance, songs: List<Song>, showMiniBar: Boolea
             }
             Panel(Modifier.weight(1f)) {
                 Column {
-                    ListToolbar(label = "Date added", count = songs.size, onLabel = {}, onShuffle = {}, onPlayAll = {})
+                    ListToolbar(label = "Date added", count = songs.size, onShuffle = {}, onPlayAll = {})
                     shown.forEach { SongRow(it, onClick = {}, onPlayNext = {}, onOptions = {}) }
                 }
             }

@@ -451,6 +451,9 @@ private fun MiniBar(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            HintIconButton("Previous track", onClick = player::previous) {
+                Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous song")
+            }
             HintIconButton(if (state.isPlaying) "Pause" else "Play", onClick = player::togglePlay) {
                 Icon(
                     if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,

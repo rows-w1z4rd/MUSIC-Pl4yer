@@ -8,6 +8,7 @@ import com.suna.player.data.AccentHue
 import com.suna.player.ui.theme.LocalWallpaperTones
 import com.suna.player.ui.theme.LocalIsLight
 import com.suna.player.ui.theme.WallpaperImage
+import com.suna.player.ui.theme.AppBackground
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -143,24 +144,30 @@ fun SettingsScreen(
     AnimatedContent(
         targetState = page,
         transitionSpec = {
+            // Samsung's parallax: the sub-page slides the full width on top, the main page
+            // drifts a quarter of the way underneath.
             val forward = targetState != Page.MAIN
-            slideInHorizontally(PageSlide) { if (forward) it else -it }
-                .togetherWith(slideOutHorizontally(PageSlide) { if (forward) -it else it })
+            (slideInHorizontally(PageSlide) { if (forward) it else -it / 4 }
+                .togetherWith(slideOutHorizontally(PageSlide) { if (forward) -it / 4 else it }))
+                .apply { targetContentZIndex = if (forward) 1f else 0f }
         },
         label = "settingsPage",
     ) { shown ->
-        SettingsPage(
-            title = shown.title,
-            backLabel = if (shown == Page.MAIN) null else "Settings",
-            onBack = if (shown == Page.MAIN) onBack else ({ page = Page.MAIN }),
-        ) {
-            when (shown) {
-                Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save) { page = it }
-                Page.THEME -> ThemePage(appearance, wallpaper != null, save)
-                Page.ACCENT -> AccentPage(appearance, save)
-                Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onWallpaperPreview)
-                Page.HEADER -> HeaderPage(appearance, save)
-                Page.TABS -> TabsPage(appearance.tabs) { tabs -> save { setTabs(tabs) } }
+        // Each page has its own solid background, so the one on top covers the one below.
+        AppBackground(wallpaper, appearance) {
+            SettingsPage(
+                title = shown.title,
+                backLabel = if (shown == Page.MAIN) null else "Settings",
+                onBack = if (shown == Page.MAIN) onBack else ({ page = Page.MAIN }),
+            ) {
+                when (shown) {
+                    Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save) { page = it }
+                    Page.THEME -> ThemePage(appearance, wallpaper != null, save)
+                    Page.ACCENT -> AccentPage(appearance, save)
+                    Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onWallpaperPreview)
+                    Page.HEADER -> HeaderPage(appearance, save)
+                    Page.TABS -> TabsPage(appearance.tabs) { tabs -> save { setTabs(tabs) } }
+                }
             }
         }
     }
