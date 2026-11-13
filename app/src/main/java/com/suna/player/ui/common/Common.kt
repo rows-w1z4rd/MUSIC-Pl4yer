@@ -1,5 +1,8 @@
 package com.suna.player.ui.common
 
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Rect
@@ -59,6 +62,9 @@ import com.suna.player.data.albumArtUri
 import com.suna.player.ui.theme.LocalHasWallpaper
 import com.suna.player.ui.theme.LocalIsLight
 import com.suna.player.ui.theme.SmallLabel
+
+/** How long a page takes to slide in or out, when it isn't following a back swipe. */
+val PageSlide = tween<IntOffset>(durationMillis = 320, easing = FastOutSlowInEasing)
 
 /** Height the floating mini player covers at the bottom; lists add it as bottom padding. */
 val LocalMiniPlayerSpace = compositionLocalOf { 0.dp }

@@ -1,5 +1,8 @@
 package com.suna.player
 
+import com.suna.player.ui.common.PageSlide
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
 import dev.chrisbanes.haze.rememberHazeState
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.geometry.Rect
@@ -215,10 +218,20 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             LocalSongSelection provides selection,
             LocalSongLongPress provides onLongPress,
         ) {
+            // Pages slide side by side, never fading: going back, the page follows the finger
+            // to the right while the one before comes in from the left, and slides back if the
+            // gesture is cancelled. The pages never overlap, so the wallpaper stays still.
             NavHost(
                 navController = nav,
                 startDestination = Routes.LIBRARY,
                 modifier = Modifier.fillMaxSize().hazeSource(haze),
+                enterTransition = { slideInHorizontally(PageSlide) { it } },
+                exitTransition = { slideOutHorizontally(PageSlide) { -it } },
+                popEnterTransition = { slideInHorizontally(PageSlide) { -it } },
+                popExitTransition = { slideOutHorizontally(PageSlide) { it } },
+                // The same slide while a back swipe is in progress (the default shrinks the page).
+                predictivePopEnterTransition = { slideInHorizontally(PageSlide) { -it } },
+                predictivePopExitTransition = { slideOutHorizontally(PageSlide) { it } },
             ) {
                 composable(Routes.LIBRARY) {
                     LibraryScreen(

@@ -1,5 +1,13 @@
 package com.suna.player.ui.settings
 
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import com.suna.player.ui.common.PageSlide
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
 import com.suna.player.ui.theme.on
@@ -133,18 +141,33 @@ fun SettingsScreen(
     onWallpaperPreview: (newPicture: Boolean) -> Unit,
 ) {
     var page by rememberSaveable { mutableStateOf(Page.MAIN) }
-    BackHandler(enabled = page != Page.MAIN) { page = Page.MAIN }
     val save = rememberSave(settings)
 
-    AnimatedContent(
-        targetState = page,
+    // A back swipe from a sub-page drags it to the right with the finger while the main page
+    // comes in from the left; letting go finishes the slide, cancelling slides it back.
+    val pages = remember { SeekableTransitionState(page) }
+    var swiping by remember { mutableStateOf(false) }
+    LaunchedEffect(page) { if (!swiping && pages.currentState != page) pages.animateTo(page) }
+    PredictiveBackHandler(enabled = page != Page.MAIN) { progress ->
+        swiping = true
+        try {
+            progress.collect { event -> pages.seekTo(event.progress, targetState = Page.MAIN) }
+            pages.animateTo(Page.MAIN)
+            page = Page.MAIN
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) { pages.animateTo(pages.currentState) }
+            throw e
+        } finally {
+            swiping = false
+        }
+    }
+
+    rememberTransition(pages, label = "settingsPage").AnimatedContent(
         transitionSpec = {
             val forward = targetState != Page.MAIN
-            val slide = tween<IntOffset>(320)
-            (slideInHorizontally(slide) { if (forward) it / 3 else -it / 3 } + fadeIn(tween(220)))
-                .togetherWith(slideOutHorizontally(slide) { if (forward) -it / 3 else it / 3 } + fadeOut(tween(160)))
+            slideInHorizontally(PageSlide) { if (forward) it else -it }
+                .togetherWith(slideOutHorizontally(PageSlide) { if (forward) -it else it })
         },
-        label = "settingsPage",
     ) { shown ->
         SettingsPage(
             title = shown.title,
