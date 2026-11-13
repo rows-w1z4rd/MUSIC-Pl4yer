@@ -16,7 +16,8 @@ android {
         // On GitHub Actions every build gets a higher number, so the phone accepts it as an update.
         val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionCode = build
-        versionName = "0.1.$build"
+        // The version people see, set once in gradle.properties.
+        versionName = providers.gradleProperty("appVersion").get()
     }
 
     // The release key lives outside the repo: on GitHub it comes from the repository secrets,

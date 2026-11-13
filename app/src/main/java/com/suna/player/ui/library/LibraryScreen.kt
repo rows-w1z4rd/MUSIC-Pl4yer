@@ -310,7 +310,7 @@ private data class TabSpot(val left: Float, val right: Float, val top: Float, va
 /**
  * The library tabs, Samsung-style: the active tab's name always sits in the middle and the
  * row glides along with the pages as you swipe, its neighbors fading out at the sides.
- * An accent line under the name sends light up and outward, like a stage light.
+ * An accent line sits under the active name.
  */
 @Composable
 internal fun TabBar(

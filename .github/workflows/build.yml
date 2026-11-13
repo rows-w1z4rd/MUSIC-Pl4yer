@@ -19,6 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # The version comes from gradle.properties, the same place the app reads it from.
+      # Stops right away if that version was already released.
+      - name: Read the version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep '^appVersion=' gradle.properties | cut -d= -f2 | tr -d '\r')
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "::error::Release v$VERSION already exists. Raise appVersion in gradle.properties, then re-run this workflow."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       # Matches gradle/gradle-daemon-jvm.properties, so Gradle doesn't download its own JDK.
       - uses: actions/setup-java@v5
         with:
@@ -48,7 +61,6 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: 0.1.${{ github.run_number }}
         run: |
           apk="MU51C-$VERSION.apk"
           cp app/build/outputs/apk/release/app-release.apk "$apk"
