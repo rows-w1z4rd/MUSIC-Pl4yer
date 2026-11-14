@@ -1,5 +1,9 @@
 package com.suna.player.ui.library
 
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.Icons
 import android.content.Context
 import android.provider.MediaStore
 import android.text.format.DateUtils
@@ -46,7 +50,7 @@ private data class FileFacts(val format: String?, val kbps: Int?, val bytes: Lon
 /** Everything known about a song: the file, where it lives, and how often it was played. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SongDetailsSheet(song: Song, plays: SongPlays?, onDismiss: () -> Unit) {
+fun SongDetailsSheet(song: Song, plays: SongPlays?, onDismiss: () -> Unit, onEdit: (() -> Unit)? = null) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val facts by produceState<FileFacts?>(null, song.id) {
@@ -72,6 +76,12 @@ fun SongDetailsSheet(song: Song, plays: SongPlays?, onDismiss: () -> Unit) {
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 14.dp),
             )
             Text(song.artist, fontSize = 15.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+            if (onEdit != null) {
+                TextButton(onClick = onEdit, modifier = Modifier.padding(top = 4.dp)) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Edit", modifier = Modifier.padding(start = 6.dp))
+                }
+            }
 
             Group("Track") {
                 Fact("Album", song.album.ifBlank { "Unknown album" })

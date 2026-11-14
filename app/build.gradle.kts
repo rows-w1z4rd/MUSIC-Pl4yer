@@ -38,7 +38,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         debug {
@@ -82,6 +82,8 @@ dependencies {
 
     implementation(libs.coil.compose)
     implementation(libs.haze)
+    // Reads and writes music file tags (title, artist, cover) for "Edit track info".
+    implementation(libs.jaudiotagger)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

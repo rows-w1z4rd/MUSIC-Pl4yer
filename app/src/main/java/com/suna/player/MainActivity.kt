@@ -1,5 +1,6 @@
 package com.suna.player
 
+import com.suna.player.ui.library.EditTrackScreen
 import com.suna.player.ui.library.PlaylistSelectionTopBar
 import com.suna.player.ui.library.PlaylistSelectionBottomBar
 import com.suna.player.ui.library.PlaylistSelection
@@ -161,6 +162,7 @@ private object Routes {
     const val FOLDER = "folder/{path}"
     const val PLAYLIST_ADD = "playlist/{id}/add"
     const val SEARCH = "search"
+    const val EDIT_TRACK = "edit/{id}"
     const val SMART = "smart/{name}"
 }
 
@@ -464,6 +466,26 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                         )
                     }
                 }
+                composable(
+                    Routes.EDIT_TRACK,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong("id") ?: -1L
+                    // Keeps the song it was opened for, even while the library reloads after saving.
+                    val song = remember(id) { songsById[id] }
+                    AppBackground(wallpaper, appearance) {
+                        if (song != null) {
+                            EditTrackScreen(
+                                song = song,
+                                editor = app.tagEditor,
+                                onDone = { saved ->
+                                    nav.popBackStack()
+                                    if (saved) player.notify("Track info saved")
+                                },
+                            )
+                        }
+                    }
+                }
                 composable(Routes.SEARCH) {
                     AppBackground(wallpaper, appearance) {
                         SearchScreen(
@@ -675,6 +697,10 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 nav.navigate("artist/${song.artistId}")
             },
             onShowDetails = { detailsFor = song },
+            onEditInfo = {
+                scope.launch { expansion.snapTo(0f) }
+                nav.navigate("edit/${song.id}")
+            },
             onShare = { shareSongs(context, listOf(song)) },
             onDelete = { deleteSongs(listOf(song)) },
             onRemoveFromPlaylist = if (playlistId != null) {
@@ -687,7 +713,16 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     }
 
     detailsFor?.let { song ->
-        SongDetailsSheet(song = song, plays = plays[song.id], onDismiss = { detailsFor = null })
+        SongDetailsSheet(
+            song = song,
+            plays = plays[song.id],
+            onDismiss = { detailsFor = null },
+            onEdit = {
+                detailsFor = null
+                scope.launch { expansion.snapTo(0f) }
+                nav.navigate("edit/${song.id}")
+            },
+        )
     }
 
     addToPlaylist?.let { picked ->

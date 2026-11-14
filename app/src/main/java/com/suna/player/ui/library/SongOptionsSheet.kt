@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import androidx.compose.material.icons.rounded.Edit
 import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -87,6 +88,7 @@ fun SongOptionsSheet(
     onOpenAlbum: () -> Unit,
     onOpenArtist: () -> Unit,
     onShowDetails: () -> Unit,
+    onEditInfo: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -147,6 +149,7 @@ fun SongOptionsSheet(
                 Option(Icons.Rounded.Person, "Go to artist", then(onOpenArtist))
                 Divider()
                 Option(Icons.Rounded.Info, "Track details", then(onShowDetails))
+                Option(Icons.Rounded.Edit, "Edit track info", then(onEditInfo))
                 Divider()
                 Option(
                     Icons.Rounded.TravelExplore,
