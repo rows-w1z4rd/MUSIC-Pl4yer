@@ -1,5 +1,10 @@
 package com.suna.player.ui.library
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.foundation.combinedClickable
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -300,12 +305,31 @@ fun AddTracksScreen(
 
 /** A playlist on the Playlists tab: its picture, name, a heart if it's a favorite, its size. */
 @Composable
-fun PlaylistRow(playlist: Playlist, cover: Uri?, onClick: () -> Unit) {
+fun PlaylistRow(
+    playlist: Playlist,
+    cover: Uri?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+    /** Null when not picking; otherwise whether this one is picked. */
+    selected: Boolean? = null,
+) {
     val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (selected == true) colors.primary.copy(alpha = 0.12f) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
     ) {
+        if (selected != null) {
+            Icon(
+                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (selected) "Selected" else "Not selected",
+                tint = if (selected) colors.primary else colors.onSurfaceVariant,
+                modifier = Modifier.padding(end = 14.dp).size(24.dp),
+            )
+        }
         Artwork(cover, Modifier.size(58.dp), corner = 16.dp)
         Text(
             playlist.name,
@@ -317,16 +341,17 @@ fun PlaylistRow(playlist: Playlist, cover: Uri?, onClick: () -> Unit) {
         if (playlist.favorite) {
             Icon(Icons.Rounded.Favorite, contentDescription = "Favorite", tint = colors.primary, modifier = Modifier.padding(end = 10.dp).size(18.dp))
         }
-        Text(songCount(playlist.songIds.size), fontSize = 15.sp, color = colors.onSurfaceVariant)
+        if (selected == null) Text(songCount(playlist.songIds.size), fontSize = 15.sp, color = colors.onSurfaceVariant)
     }
 }
 
 /** A big square card for a smart list, like Samsung's "Most played". */
 @Composable
-fun SmartListCard(list: SmartList, cover: Uri?, count: Int, onClick: () -> Unit) {
+fun SmartListCard(list: SmartList, cover: Uri?, count: Int, onClick: () -> Unit, enabled: Boolean = true) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick).padding(4.dp),
+        // Dimmed and inactive while picking playlists, as in Samsung Music.
+        modifier = Modifier.alpha(if (enabled) 1f else 0.4f).clickable(enabled = enabled, onClick = onClick).padding(4.dp),
     ) {
         Artwork(cover, Modifier.size(150.dp), corner = 26.dp)
         Text(list.label, fontSize = 16.sp, modifier = Modifier.padding(top = 10.dp))

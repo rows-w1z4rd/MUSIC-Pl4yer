@@ -1,5 +1,16 @@
 package com.suna.player
 
+import com.suna.player.ui.library.PlaylistSelectionTopBar
+import com.suna.player.ui.library.PlaylistSelectionBottomBar
+import com.suna.player.ui.library.PlaylistSelection
+import com.suna.player.data.LibraryTab
+import androidx.core.graphics.drawable.IconCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.content.pm.ShortcutInfoCompat
+import android.widget.Toast
+import android.media.audiofx.AudioEffect
+import android.content.Intent
+import android.content.Context
 import kotlinx.coroutines.delay
 import com.suna.player.ui.library.playlistCover
 import com.suna.player.ui.library.SmartList
@@ -97,6 +108,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        intent?.getStringExtra(EXTRA_OPEN_TAB)?.let { tab ->
+            getSharedPreferences("ui", MODE_PRIVATE).edit().putString("last_tab", tab).apply()
+        }
         enableEdgeToEdge()
         setContent {
             val appearance by app.settings.appearance.collectAsStateWithLifecycle(initialValue = null)
@@ -214,19 +228,36 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val haze = rememberHazeState()
     val current = playerState.current
     val selection = remember { SongSelection() }
+    val playlistSelection = remember { PlaylistSelection() }
+    val picking = selection.active || playlistSelection.active
     val showPlayer = current != null && route != Routes.QUEUE && route != Routes.WALLPAPER &&
-        route != Routes.WALLPAPER_NEW && !selection.active
+        route != Routes.WALLPAPER_NEW && !picking
+    var deletingPlaylists by remember { mutableStateOf<List<Long>?>(null) }
+    var renamingPlaylist by remember { mutableStateOf<Long?>(null) }
+    val soundEffects = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    val effectsIntent = remember {
+        Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
+            .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+            .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+    }
+    val hasEffects = remember { effectsIntent.resolveActivity(context.packageManager) != null }
+    val songsOf: (List<Long>) -> List<Song> = { ids ->
+        ids.mapNotNull { id -> playlists.find { it.id == id } }.flatMap { it.songIds }.mapNotNull { songsById[it] }
+    }
     val deleteSongs = rememberDeleteSongs(onDeleted = selection::clear)
     val playNext: (Song) -> Unit = { player.playNext(listOf(it)) }
     val openSongOptions: (Song) -> Unit = { optionsFor = OptionsTarget(it, playlistId = null) }
 
     LaunchedEffect(showPlayer) { if (!showPlayer) expansion.snapTo(0f) }
     // Picking songs also ends when leaving the page it started on.
-    LaunchedEffect(route) { selection.clear() }
+    LaunchedEffect(route) {
+        selection.clear()
+        playlistSelection.clear()
+    }
 
     Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
-            LocalMiniPlayerSpace provides if (showPlayer || selection.active) MiniPlayerSpace else 0.dp,
+            LocalMiniPlayerSpace provides if (showPlayer || picking) MiniPlayerSpace else 0.dp,
             LocalSongSelection provides selection,
             LocalSongLongPress provides onLongPress,
         ) {
@@ -264,6 +295,17 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                             onStartSelection = selection::startEmpty,
                             onOpenSearch = { nav.navigate(Routes.SEARCH) { launchSingleTop = true } },
                             onOpenSmart = { nav.navigate("smart/${it.name}") },
+                            playlistSelection = playlistSelection,
+                            onAddShortcut = { tab -> addTabShortcut(context, tab) },
+                            onSoundEffects = if (hasEffects) {
+                                {
+                                    soundEffects.launch(
+                                        Intent(effectsIntent).putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                         )
                     }
                 }
@@ -513,6 +555,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             scope.launch { expansion.collapse() }
         }
         BackHandler(enabled = selection.active) { selection.clear() }
+        BackHandler(enabled = playlistSelection.active) { playlistSelection.clear() }
 
         if (showPlayer) {
             PlayerSheet(
@@ -570,6 +613,46 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 selection.clear()
             },
         )
+
+        PlaylistSelectionTopBar(playlistSelection)
+        PlaylistSelectionBottomBar(
+            selection = playlistSelection,
+            onPlay = { ids ->
+                player.play(songsOf(ids), 0)
+                playlistSelection.clear()
+            },
+            onAdd = { ids -> addToPlaylist = songsOf(ids) },
+            onShare = { ids -> shareSongs(context, songsOf(ids)) },
+            onDelete = { ids -> deletingPlaylists = ids },
+            onRename = { id -> renamingPlaylist = id },
+        )
+    }
+
+    deletingPlaylists?.let { ids ->
+        val names = ids.mapNotNull { id -> playlists.find { it.id == id }?.name }
+        DeletePlaylistDialog(
+            name = if (names.size == 1) names[0] else "${names.size} playlists",
+            onConfirm = {
+                ids.forEach { app.playlists.delete(it) }
+                playlistSelection.clear()
+            },
+            onDismiss = { deletingPlaylists = null },
+        )
+    }
+
+    renamingPlaylist?.let { id ->
+        playlists.find { it.id == id }?.let { playlist ->
+            PlaylistNameDialog(
+                title = "Rename",
+                initialName = playlist.name,
+                confirmLabel = "Rename",
+                onConfirm = {
+                    app.playlists.rename(id, it)
+                    playlistSelection.clear()
+                },
+                onDismiss = { renamingPlaylist = null },
+            )
+        }
     }
 
     optionsFor?.let { target ->
@@ -613,6 +696,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             onPick = { id ->
                 picked.forEach { app.playlists.addSong(id, it.id) }
                 selection.clear()
+                playlistSelection.clear()
             },
             onNew = {
                 addToPlaylist = null
@@ -653,4 +737,28 @@ private fun PermissionScreen(onAllow: () -> Unit) {
         )
         Button(onClick = onAllow) { Text("Allow access to music") }
     }
+}
+
+/** Extra on the launch intent: which library tab to open on (from a home screen shortcut). */
+private const val EXTRA_OPEN_TAB = "com.suna.player.OPEN_TAB"
+
+/**
+ * Asks the home screen to pin a shortcut that opens the app on [tab], as Samsung Music's
+ * "Add shortcut on Home screen" does. The launcher shows its own confirmation.
+ */
+private fun addTabShortcut(context: Context, tab: LibraryTab) {
+    if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+        Toast.makeText(context, "Your home screen doesn't support shortcuts", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val open = Intent(context, MainActivity::class.java)
+        .setAction(Intent.ACTION_VIEW)
+        .putExtra(EXTRA_OPEN_TAB, tab.name)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    val shortcut = ShortcutInfoCompat.Builder(context, "tab-${tab.name.lowercase()}")
+        .setShortLabel(tab.label)
+        .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+        .setIntent(open)
+        .build()
+    ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)
 }

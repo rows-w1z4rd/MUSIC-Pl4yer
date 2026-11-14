@@ -174,7 +174,7 @@ fun BoxScope.SelectionBottomBar(
 }
 
 @Composable
-private fun BarAction(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun BarAction(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier

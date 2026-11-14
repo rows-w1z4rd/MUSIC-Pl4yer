@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import androidx.compose.runtime.SideEffect
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.semantics
@@ -145,6 +146,10 @@ fun LibraryScreen(
     onStartSelection: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSmart: (SmartList) -> Unit,
+    playlistSelection: PlaylistSelection,
+    onAddShortcut: (LibraryTab) -> Unit,
+    /** Opens the phone's sound settings for the music; null if the phone has none to open. */
+    onSoundEffects: (() -> Unit)?,
 ) {
     // The library reopens on the tab it was left on, even after the app was cleared.
     val context = LocalContext.current
@@ -188,10 +193,27 @@ fun LibraryScreen(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 offset = DpOffset(x = 0.dp, y = 4.dp),
             ) {
+                // Samsung Music's menu: Edit, a home screen shortcut, sound settings, Settings.
                 if (onSongPage) {
-                    MenuItem("Select") {
+                    MenuItem("Edit") {
                         menuOpen = false
                         onStartSelection()
+                    }
+                }
+                if (onPlaylistsTab) {
+                    MenuItem("Edit") {
+                        menuOpen = false
+                        playlistSelection.start()
+                    }
+                    MenuItem("Add shortcut on Home screen") {
+                        menuOpen = false
+                        onAddShortcut(LibraryTab.PLAYLISTS)
+                    }
+                }
+                if (onSoundEffects != null) {
+                    MenuItem("Sound quality and effects") {
+                        menuOpen = false
+                        onSoundEffects()
                     }
                 }
                 MenuItem("Settings") {
@@ -251,7 +273,7 @@ fun LibraryScreen(
                         LibraryTab.ALBUMS -> AlbumGrid(songs, onOpenAlbum, bottomSpace)
                         LibraryTab.ARTISTS -> ArtistList(songs, onOpenArtist, listPadding)
                         LibraryTab.PLAYLISTS ->
-                            PlaylistsPage(songs, plays, playlists, onOpenPlaylist, onOpenSmart, listPadding)
+                            PlaylistsPage(songs, plays, playlists, onOpenPlaylist, onOpenSmart, listPadding, playlistSelection)
                         LibraryTab.FOLDERS -> FolderList(songs, onOpenFolder, listPadding)
                         LibraryTab.MOST_PLAYED -> StatsPage(
                             songs, plays, mostPlayed = true, onPlay, onPlayNext, onSongOptions, listPadding,
@@ -761,6 +783,7 @@ private fun PlaylistsPage(
     onOpen: (Long) -> Unit,
     onOpenSmart: (SmartList) -> Unit,
     padding: PaddingValues,
+    selection: PlaylistSelection,
 ) {
     val context = LocalContext.current
     val uiPrefs = remember { context.getSharedPreferences("ui", Context.MODE_PRIVATE) }
@@ -772,6 +795,7 @@ private fun PlaylistsPage(
         else compareBy<Playlist>({ !it.favorite }, { -it.id })
         playlists.sortedWith(order)
     }
+    SideEffect { selection.adopt(sorted.map { it.id }) }
     val grey = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
         item(key = "sort") {
@@ -819,6 +843,7 @@ private fun PlaylistsPage(
                         cover = listSongs.firstOrNull()?.let { albumArtUri(it.albumId) },
                         count = listSongs.size,
                         onClick = { onOpenSmart(list) },
+                        enabled = !selection.active,
                     )
                 }
             }
@@ -834,7 +859,13 @@ private fun PlaylistsPage(
             }
         }
         items(sorted, key = { it.id }) { playlist ->
-            PlaylistRow(playlist, playlistCover(playlist, songsById), onClick = { onOpen(playlist.id) })
+            PlaylistRow(
+                playlist = playlist,
+                cover = playlistCover(playlist, songsById),
+                onClick = { if (selection.active) selection.toggle(playlist.id) else onOpen(playlist.id) },
+                onLongClick = { if (selection.active) selection.toggle(playlist.id) else selection.start(playlist.id) },
+                selected = if (selection.active) playlist.id in selection.ids else null,
+            )
         }
     }
 }

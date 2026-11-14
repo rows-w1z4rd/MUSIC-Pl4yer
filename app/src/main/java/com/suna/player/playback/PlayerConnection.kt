@@ -96,6 +96,10 @@ class PlayerConnection(private val context: Context) {
         )
     }
 
+    /** The audio session the music plays in, for the phone's sound effects; 0 if not known. */
+    val audioSessionId: Int
+        get() = controller?.sessionExtras?.getInt(PlaybackService.EXTRA_AUDIO_SESSION, 0) ?: 0
+
     fun release() {
         controller?.removeListener(listener)
         controller = null

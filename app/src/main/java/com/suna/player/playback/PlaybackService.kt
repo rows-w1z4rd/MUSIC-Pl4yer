@@ -1,5 +1,6 @@
 package com.suna.player.playback
 
+import android.media.audiofx.AudioEffect
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionCommand
 import android.os.Bundle
@@ -86,6 +87,11 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(openApp)
             .setCallback(SessionCallback())
             .build()
+
+        // Tells the phone's sound effects (Samsung's "Sound quality and effects", an equalizer
+        // app) which audio to work on, and lets the app open their settings for it.
+        sendBroadcast(effectsIntent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION))
+        publishExtras()
 
         scope.launch {
             app.settings.skipSilence.collect { player.skipSilenceEnabled = it }
@@ -267,6 +273,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        sendBroadcast(effectsIntent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION))
         savePosition()
         val info = player.currentMediaItem?.toWidgetInfo()
         val context = applicationContext
@@ -387,15 +394,30 @@ class PlaybackService : MediaSessionService() {
     private fun setRepeatsLeft(n: Int) {
         repeatsLeft = n
         if (n == 0) restoreRepeatMode()
-        session?.setSessionExtras(Bundle().apply { putInt(EXTRA_REPEATS_LEFT, n) })
+        publishExtras()
     }
 
     private fun stopRepeats(restore: Boolean) {
         if (repeatsLeft == 0) return
         repeatsLeft = 0
         if (restore) restoreRepeatMode()
-        session?.setSessionExtras(Bundle().apply { putInt(EXTRA_REPEATS_LEFT, 0) })
+        publishExtras()
     }
+
+    /** What the app's screens read from the session: repeats left and the audio session. */
+    private fun publishExtras() {
+        session?.setSessionExtras(
+            Bundle().apply {
+                putInt(EXTRA_REPEATS_LEFT, repeatsLeft)
+                putInt(EXTRA_AUDIO_SESSION, player.audioSessionId)
+            },
+        )
+    }
+
+    private fun effectsIntent(action: String) = Intent(action)
+        .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
+        .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+        .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
 
     private fun restoreRepeatMode() {
         if (player.repeatMode != repeatModeBefore) {
@@ -475,6 +497,7 @@ class PlaybackService : MediaSessionService() {
         const val COMMAND_REPEAT_TIMES = "com.suna.player.REPEAT_TIMES"
         const val EXTRA_TIMES = "times"
         const val EXTRA_REPEATS_LEFT = "repeats_left"
+        const val EXTRA_AUDIO_SESSION = "audio_session"
 
         const val MIN_COUNTED_MS = 30_000L
         const val ENDLESS_BATCH = 20
