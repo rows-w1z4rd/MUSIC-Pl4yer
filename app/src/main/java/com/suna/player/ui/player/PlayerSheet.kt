@@ -1,5 +1,7 @@
 package com.suna.player.ui.player
 
+import com.suna.player.data.Lyrics
+import androidx.compose.material.icons.rounded.Lyrics
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.HazeStyle
@@ -191,6 +193,8 @@ fun PlayerSheet(
     onAddToPlaylist: (() -> Unit)?,
     isFavorite: Boolean,
     onToggleFavorite: (() -> Unit)?,
+    /** Finds the lyrics for a track (by its media id), offline. */
+    loadLyrics: suspend (String) -> Lyrics?,
 ) {
     val current = state.current ?: return
     val scope = rememberCoroutineScope()
@@ -211,8 +215,21 @@ fun PlayerSheet(
         animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
         label = "queueShown",
     )
-    LaunchedEffect(showFull) { if (!showFull) queueOpen = false }
+    // Swiping the cover to the left shows the lyrics in its place, as on Huawei's player.
+    var lyricsOpen by remember { mutableStateOf(false) }
+    val lyricsShown by animateFloatAsState(
+        targetValue = if (lyricsOpen) 1f else 0f,
+        animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
+        label = "lyricsShown",
+    )
+    LaunchedEffect(showFull) {
+        if (!showFull) {
+            queueOpen = false
+            lyricsOpen = false
+        }
+    }
     BackHandler(enabled = queueOpen && showFull) { queueOpen = false }
+    BackHandler(enabled = lyricsOpen && showFull) { lyricsOpen = false }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = constraints.maxWidth.toFloat()
@@ -309,13 +326,23 @@ fun PlayerSheet(
                     sidePadding = with(density) { artLeft.toDp() },
                     queueOpen = queueOpen,
                     queueShown = { queueShown },
+                    lyricsOpen = lyricsOpen,
+                    lyricsShown = { lyricsShown },
+                    loadLyrics = loadLyrics,
+                    onLyrics = { open ->
+                        lyricsOpen = open
+                        if (open) queueOpen = false
+                    },
                     modifier = Modifier.graphicsLayer {
                         val p = expansion.value
                         alpha = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
                         translationY = (1f - p) * px(48.dp)
                     },
                     onCollapse = { scope.launch { expansion.collapse() } },
-                    onToggleQueue = { queueOpen = !queueOpen },
+                    onToggleQueue = {
+                        queueOpen = !queueOpen
+                        if (queueOpen) lyricsOpen = false
+                    },
                     onMore = onMore,
                     onAddToPlaylist = onAddToPlaylist,
                     isFavorite = isFavorite,
@@ -347,13 +374,14 @@ fun PlayerSheet(
                         val p = expansion.value
                         val travel = lerp(miniScale, 1f, p)
                         val scale = travel * lerp(1f, pausedShrink, p) * lerp(1f, 0.9f, queueShown)
-                        alpha = 1f - queueShown
+                        alpha = 1f - maxOf(queueShown, lyricsShown)
                         val slot = artSize * travel
                         val shown = artSize * scale
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = scale
                         scaleY = scale
-                        translationX = lerp(miniArtLeft, artLeft, p) + (slot - shown) / 2
+                        // Slides off to the left as the lyrics come in from the right.
+                        translationX = lerp(miniArtLeft, artLeft, p) + (slot - shown) / 2 - lyricsShown * width * 0.5f
                         translationY = lerp(miniArtTop, artTop, p) + (slot - shown) / 2
                         // The corner is set before scaling, so divide to keep it the size we want.
                         shape = RoundedCornerShape(lerp(px(8.dp), px(18.dp), p) / scale)
@@ -520,6 +548,10 @@ private fun FullPlayer(
     sidePadding: Dp,
     queueOpen: Boolean,
     queueShown: () -> Float,
+    lyricsOpen: Boolean,
+    lyricsShown: () -> Float,
+    loadLyrics: suspend (String) -> Lyrics?,
+    onLyrics: (open: Boolean) -> Unit,
     modifier: Modifier,
     onCollapse: () -> Unit,
     onToggleQueue: () -> Unit,
@@ -557,12 +589,34 @@ private fun FullPlayer(
 
             // The artwork (drawn by the sheet, flying in from the bar) and the title, or the
             // queue in their place.
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            val swipe = with(LocalDensity.current) { 56.dp.toPx() }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    // Left swipe: lyrics; right swipe: back to the cover.
+                    .pointerInput(queueOpen, lyricsOpen) {
+                        var dx = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { dx = 0f },
+                            onDragEnd = {
+                                if (dx < -swipe && !lyricsOpen && !queueOpen) onLyrics(true)
+                                if (dx > swipe && lyricsOpen) onLyrics(false)
+                            },
+                        ) { change, amount ->
+                            change.consume()
+                            dx += amount
+                        }
+                    },
+            ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = 1f - queueShown() },
+                        .graphicsLayer {
+                            alpha = 1f - maxOf(queueShown(), lyricsShown())
+                            translationX = -lyricsShown() * size.width * 0.5f
+                        },
                 ) {
                     Spacer(Modifier.height(ArtTopGap + artSize + 22.dp))
                     Text(
@@ -582,6 +636,21 @@ private fun FullPlayer(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = sidePadding).padding(top = 4.dp),
+                    )
+                }
+                if (lyricsOpen || lyricsShown() > 0f) {
+                    LyricsView(
+                        mediaId = current.mediaId,
+                        loadLyrics = loadLyrics,
+                        player = player,
+                        playing = state.isPlaying,
+                        bright = stage.bright,
+                        dim = stage.dim,
+                        sidePadding = 28.dp,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = lyricsShown()
+                            translationX = (1f - lyricsShown()) * size.width * 0.4f
+                        },
                     )
                 }
                 if (queueOpen || queueShown() > 0f) {
@@ -607,6 +676,13 @@ private fun FullPlayer(
                             Icons.AutoMirrored.Rounded.QueueMusic,
                             contentDescription = if (queueOpen) "Hide queue" else "Show queue",
                             tint = if (queueOpen) accent else stage.bright,
+                        )
+                    }
+                    HintIconButton(if (lyricsOpen) "Hide lyrics" else "Show lyrics", onClick = { onLyrics(!lyricsOpen) }) {
+                        Icon(
+                            Icons.Rounded.Lyrics,
+                            contentDescription = if (lyricsOpen) "Hide lyrics" else "Show lyrics",
+                            tint = if (lyricsOpen) accent else stage.bright,
                         )
                     }
                     if (onToggleFavorite != null) {

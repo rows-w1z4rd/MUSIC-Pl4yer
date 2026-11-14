@@ -199,6 +199,14 @@ class SettingsStore(private val context: Context) {
      * Hands decoding to the phone's audio chip while the screen is off, which saves battery.
      * Some phones skip or stutter with it, so it can be turned off.
      */
+    /** The folder of .lrc lyric files the user picked (its tree address), or null. */
+    val lyricsFolder: Flow<String?> =
+        context.dataStore.data.map { it[LYRICS_FOLDER] }.distinctUntilChanged()
+
+    suspend fun setLyricsFolder(uri: String?) {
+        context.dataStore.edit { if (uri == null) it.remove(LYRICS_FOLDER) else it[LYRICS_FOLDER] = uri }
+    }
+
     val audioOffload: Flow<Boolean> =
         context.dataStore.data.map { it[AUDIO_OFFLOAD] ?: false }.distinctUntilChanged()
 
@@ -243,6 +251,7 @@ class SettingsStore(private val context: Context) {
         private val WP_EDGES = stringPreferencesKey("wallpaper_edges")
         private val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
         private val AUDIO_OFFLOAD = booleanPreferencesKey("audio_offload")
+        private val LYRICS_FOLDER = stringPreferencesKey("lyrics_folder")
         private val ENDLESS_PLAY = booleanPreferencesKey("endless_play")
     }
 }

@@ -93,6 +93,7 @@ fun EditTrackScreen(
     var album by remember { mutableStateOf("") }
     var genre by remember { mutableStateOf("") }
     var year by remember { mutableStateOf("") }
+    var lyrics by remember { mutableStateOf("") }
     var cover by remember { mutableStateOf<ByteArray?>(null) }
     var original by remember { mutableStateOf<TrackInfo?>(null) }
 
@@ -105,7 +106,7 @@ fun EditTrackScreen(
             val info = opened.second
             original = info
             title = info.title; artist = info.artist; album = info.album
-            genre = info.genre; year = info.year; cover = info.cover
+            genre = info.genre; year = info.year; lyrics = info.lyrics; cover = info.cover
         }
     }
     val leave = { saved: Boolean ->
@@ -114,10 +115,11 @@ fun EditTrackScreen(
     }
     BackHandler(enabled = !saving) { leave(false) }
 
-    val info = TrackInfo(title, artist, album, genre, year, cover)
+    val info = TrackInfo(title, artist, album, genre, year, lyrics, cover)
     val changed = original != null && (
         info.title != original!!.title || info.artist != original!!.artist || info.album != original!!.album ||
-            info.genre != original!!.genre || info.year != original!!.year || !(info.cover contentEquals original!!.cover)
+            info.genre != original!!.genre || info.year != original!!.year || info.lyrics != original!!.lyrics ||
+            !(info.cover contentEquals original!!.cover)
         )
 
     val write: () -> Unit = {
@@ -209,6 +211,9 @@ fun EditTrackScreen(
                         Field("Year", year, numbers = true) { year = it.filter(Char::isDigit).take(4) }
                     }
                 }
+                Panel(Modifier.padding(top = 12.dp)) {
+                    LyricsField(lyrics) { lyrics = it }
+                }
                 if (failed) {
                     Message("Couldn't save the changes. The file was left as it was.")
                 } else {
@@ -265,4 +270,39 @@ private fun Message(text: String) {
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth().padding(24.dp),
     )
+}
+
+/**
+ * Lyrics, typed or pasted. Lines like "[01:23.45]words" (LRC) make them follow the song in the
+ * player; plain text is shown as it is.
+ */
+@Composable
+private fun LyricsField(value: String, onChange: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
+        Text("Lyrics", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.primary)
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            minLines = 4,
+            maxLines = 14,
+            textStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = colors.onSurface),
+            cursorBrush = SolidColor(colors.primary),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) {
+                        Text(
+                            "Paste lyrics here. Lines starting with a time, like [01:23.45], follow the song.",
+                            fontSize = 15.sp,
+                            lineHeight = 21.sp,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
 }

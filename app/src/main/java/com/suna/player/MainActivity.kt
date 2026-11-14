@@ -480,7 +480,10 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                                 editor = app.tagEditor,
                                 onDone = { saved ->
                                     nav.popBackStack()
-                                    if (saved) player.notify("Track info saved")
+                                    if (saved) {
+                                        player.notify("Track info saved")
+                                        scope.launch { app.lyrics.forget(song.id) }
+                                    }
                                 },
                             )
                         }
@@ -593,6 +596,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     ?.let { song -> { addToPlaylist = listOf(song) } },
                 isFavorite = current?.mediaId?.toLongOrNull() in favoriteSet,
                 onToggleFavorite = current?.mediaId?.toLongOrNull()?.let { id -> { app.favorites.toggle(id) } },
+                loadLyrics = { mediaId -> mediaId.toLongOrNull()?.let { songsById[it] }?.let { app.lyrics.load(it) } },
             )
         }
 

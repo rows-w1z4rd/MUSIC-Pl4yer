@@ -1,5 +1,8 @@
 package com.suna.player.ui.settings
 
+import androidx.compose.material.icons.rounded.Lyrics
+import android.net.Uri
+import android.content.Intent
 import com.suna.player.ui.common.PageSlide
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
@@ -454,6 +457,41 @@ private fun MainPage(
         SettingRow(Icons.Rounded.FastForward, Teal, "Skip silence", trailing = {
             Toggle(skipSilence) { on -> save { setSkipSilence(on) } }
         })
+    }
+
+    // Lyrics are shown from the music files themselves, or from .lrc files in a folder the user
+    // picks here (Android only lets the app read text files in a folder chosen this way).
+    val lyricsFolder by settings.lyricsFolder.collectAsStateWithLifecycle(initialValue = null)
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            save { setLyricsFolder(uri.toString()) }
+        }
+    }
+    Group(
+        "Lyrics",
+        footer = "Swipe the cover in the player to see a track's lyrics. They come from the music " +
+            "file itself, or from .lrc files with the same name as the track in this folder " +
+            "(your Music folder works). Nothing is downloaded.",
+    ) {
+        SettingRow(
+            Icons.Rounded.Lyrics,
+            Indigo,
+            "Lyrics folder",
+            lyricsFolder?.let { folderName(it) } ?: "Not set",
+            onClick = { pickFolder.launch(null) },
+        )
+        if (lyricsFolder != null) {
+            RowDivider()
+            SettingRow(null, Color.Transparent, "Stop using this folder", titleColor = Red, onClick = {
+                lyricsFolder?.let { old ->
+                    runCatching {
+                        context.contentResolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                }
+                save { setLyricsFolder(null) }
+            })
+        }
     }
 
     Group(
@@ -959,3 +997,7 @@ private fun TabsPage(enabled: List<LibraryTab>, onChange: (List<LibraryTab>) -> 
         }
     }
 }
+
+/** "primary:Music/Lyrics" → "Music/Lyrics", for showing which folder was picked. */
+private fun folderName(tree: String): String =
+    Uri.decode(tree).substringAfterLast(':').ifBlank { "Phone storage" }

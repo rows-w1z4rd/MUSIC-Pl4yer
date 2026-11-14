@@ -1,5 +1,6 @@
 package com.suna.player
 
+import com.suna.player.data.LyricsRepository
 import com.suna.player.data.TagEditor
 import android.app.Application
 import com.suna.player.data.MediaStoreRepository
@@ -22,4 +23,5 @@ class SunaApp : Application() {
     val stats by lazy { StatsStore(db) }
     val favorites by lazy { FavoritesStore(db) }
     val tagEditor by lazy { TagEditor(this) }
+    val lyrics by lazy { LyricsRepository(this, settings) }
 }

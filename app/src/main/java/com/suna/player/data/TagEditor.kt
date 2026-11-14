@@ -26,6 +26,8 @@ data class TrackInfo(
     val album: String,
     val genre: String,
     val year: String,
+    /** Plain or LRC-timed lyrics stored in the file. */
+    val lyrics: String,
     /** The cover stored in the file (JPEG or PNG bytes), or null if it has none. */
     val cover: ByteArray?,
 )
@@ -65,6 +67,7 @@ class TagEditor(private val context: Context) {
                 album = tag?.getFirst(FieldKey.ALBUM).orEmpty().ifEmpty { song.album },
                 genre = tag?.getFirst(FieldKey.GENRE).orEmpty(),
                 year = tag?.getFirst(FieldKey.YEAR).orEmpty(),
+                lyrics = tag?.getFirst(FieldKey.LYRICS).orEmpty(),
                 cover = tag?.firstArtwork?.binaryData,
             )
             Draft(song, original, path) to info
@@ -88,6 +91,7 @@ class TagEditor(private val context: Context) {
             put(FieldKey.ALBUM, info.album)
             put(FieldKey.GENRE, info.genre)
             put(FieldKey.YEAR, info.year)
+            if (info.lyrics.isBlank()) tag.deleteField(FieldKey.LYRICS) else tag.setField(FieldKey.LYRICS, info.lyrics.trimEnd())
             tag.deleteArtworkField()
             info.cover?.let { bytes ->
                 val art = ArtworkFactory.getNew()
