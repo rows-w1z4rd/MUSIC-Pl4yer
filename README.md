@@ -1,12 +1,15 @@
 <p align="center"><img src="docs/icon.png" width="120" alt="MU51C app icon" /></p>
 <h1 align="center">MU51C</h1>
 
+<p align="center"><i>A Huawei Music homage, with a bit of One UI.</i></p>
+
 **An offline music player for Android.** It plays the music already on your phone, with no account, no
 internet permission and no tracking.
 
-It started as a personal replacement for the stock player on a Galaxy phone, built to use almost no battery and
-to look like its own thing: themes on true black (or white), a player you drag up with your finger, a home
-screen widget, and play counts kept on the device.
+It started as a personal replacement for the stock player on a Galaxy phone. It takes its player and lyrics
+from Huawei Music, and borrows a few details from Samsung's One UI: the centered tabs, the sort menus and the
+page transitions. Built to use almost no battery, with themes on true black (or white), a player you drag up
+with your finger, and play counts kept on the device.
 
 `Kotlin · Jetpack Compose · Material 3` · `AndroidX Media3 (ExoPlayer + MediaSession)` · `Room · DataStore` ·
 `Coil 3 · Haze` · `GitHub Actions release`
@@ -32,8 +35,15 @@ screen widget, and play counts kept on the device.
 - **Endless play**: when the queue runs out, more tracks from your library follow, so the music never stops on a
   long drive. It works with shuffle too, and can be turned off.
 - **Hold gestures**: hold play to hear the track up to three more times; hold next or back to skip through it.
+- **Lyrics**: swipe the cover in the player to see them. Synced lyrics light up line by line and follow the
+  song; tap a line to jump there. They come from the music file or from .lrc files in a folder you pick, with no
+  downloading.
 - **Track menus**: a long press lifts the track and opens a quick menu; the ⋯ button opens the full one, with
-  track details and a search on Google or YouTube.
+  track details, a search on Google or YouTube, and **Edit track info** (title, artist, album, cover, lyrics),
+  saved into the file itself.
+- **Playlists** with their own covers, a heart for favorites, drag-to-reorder, a home screen shortcut, and cards
+  for recently added, most played and recently played.
+- **Search** with recent searches and voice input, grouped into tracks, artists and albums.
 - **Pick several tracks** to play, add to a playlist, share or delete them at once.
 - **Themes**: Blue, Black, Green, White, or colors taken from your own wallpaper, with an accent color on top.
 - **Wallpaper preview**: a picked picture opens behind the real library before anything is saved. Zoom out to
