@@ -1,5 +1,13 @@
 package com.suna.player
 
+import kotlinx.coroutines.delay
+import com.suna.player.ui.library.playlistCover
+import com.suna.player.ui.library.SmartList
+import com.suna.player.ui.library.SearchScreen
+import com.suna.player.ui.library.PlaylistScreen
+import com.suna.player.ui.library.AddTracksScreen
+import com.suna.player.data.PlaylistStore
+import androidx.activity.result.PickVisualMediaRequest
 import com.suna.player.ui.common.NoticeHost
 import com.suna.player.ui.common.PageSlide
 import androidx.compose.animation.slideOutHorizontally
@@ -137,6 +145,9 @@ private object Routes {
     const val ARTIST = "artist/{id}"
     const val PLAYLIST = "playlist/{id}"
     const val FOLDER = "folder/{path}"
+    const val PLAYLIST_ADD = "playlist/{id}/add"
+    const val SEARCH = "search"
+    const val SMART = "smart/{name}"
 }
 
 /** Which song the options sheet is open for, and from which playlist (if any). */
@@ -251,6 +262,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                             onNewPlaylist = { newPlaylist = NewPlaylistRequest(emptyList()) },
                             onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
                             onStartSelection = selection::startEmpty,
+                            onOpenSearch = { nav.navigate(Routes.SEARCH) { launchSingleTop = true } },
+                            onOpenSmart = { nav.navigate("smart/${it.name}") },
                         )
                     }
                 }
@@ -322,31 +335,58 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                     var renaming by remember { mutableStateOf(false) }
                     var deleting by remember { mutableStateOf(false) }
 
+                    // While a row is being dragged, the screen shows this order; it is written to
+                    // the database and dropped again once the database has caught up.
+                    var dragOrder by remember { mutableStateOf<List<Long>?>(null) }
+                    LaunchedEffect(playlist?.songIds) {
+                        if (dragOrder == playlist?.songIds) dragOrder = null
+                    }
+                    val shownSongs = remember(dragOrder, playlistSongs, songsById) {
+                        dragOrder?.mapNotNull { songsById[it] } ?: playlistSongs
+                    }
+                    LaunchedEffect(dragOrder) {
+                        val order = dragOrder ?: return@LaunchedEffect
+                        delay(350)
+                        app.playlists.reorder(id, order)
+                    }
+                    val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                        if (uri != null) app.playlists.setCover(id, uri)
+                    }
+
                     AppBackground(wallpaper, appearance) {
-
-                        SongListScreen(
-                            title = playlist?.name ?: "Playlist",
-                            songs = playlistSongs,
-                            onBack = { nav.popBackStack() },
-                            onPlay = { player.play(playlistSongs, it) },
-                            onShuffle = { player.shuffleAll(playlistSongs) },
-                            onPlayNext = playNext,
-                            onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
-                            actions = {
-                                IconButton(onClick = { renaming = true }) {
-                                    Icon(Icons.Rounded.Edit, contentDescription = "Rename playlist")
-                                }
-                                IconButton(onClick = { deleting = true }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete playlist")
-                                }
-                            },
-                        )
-
+                        if (playlist != null) {
+                            PlaylistScreen(
+                                playlist = playlist,
+                                songs = shownSongs,
+                                cover = playlistCover(playlist, songsById),
+                                onBack = { nav.popBackStack() },
+                                onPlay = { player.play(shownSongs, it) },
+                                onShuffle = { player.shuffleAll(shownSongs) },
+                                onPlayNext = playNext,
+                                onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
+                                onToggleFavorite = { app.playlists.setFavorite(id, !playlist.favorite) },
+                                onAddTracks = { nav.navigate("playlist/$id/add") },
+                                onEdit = { selection.start(shownSongs, null, playlistId = id) },
+                                onRename = { renaming = true },
+                                onChangeCover = {
+                                    pickCover.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                },
+                                onRemoveCover = if (playlist.cover != null) ({ app.playlists.setCover(id, null) }) else null,
+                                onDelete = { deleting = true },
+                                onMove = { from, to ->
+                                    val order = (dragOrder ?: shownSongs.map { it.id }).toMutableList()
+                                    if (from in order.indices && to in order.indices) {
+                                        order.add(to, order.removeAt(from))
+                                        dragOrder = order
+                                    }
+                                },
+                            )
+                        }
                     }
 
                     if (renaming && playlist != null) {
                         PlaylistNameDialog(
-                            title = "Rename playlist",
+                            title = "Rename",
                             initialName = playlist.name,
                             confirmLabel = "Rename",
                             onConfirm = { app.playlists.rename(id, it) },
@@ -361,6 +401,55 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                                 app.playlists.delete(id)
                             },
                             onDismiss = { deleting = false },
+                        )
+                    }
+                }
+                composable(
+                    Routes.PLAYLIST_ADD,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong("id") ?: -1L
+                    val playlist = playlists.find { it.id == id }
+                    AppBackground(wallpaper, appearance) {
+                        AddTracksScreen(
+                            songs = songs,
+                            alreadyIn = playlist?.songIds?.toSet().orEmpty(),
+                            onBack = { nav.popBackStack() },
+                            onDone = { picked ->
+                                picked.forEach { app.playlists.addSong(id, it.id) }
+                                nav.popBackStack()
+                            },
+                        )
+                    }
+                }
+                composable(Routes.SEARCH) {
+                    AppBackground(wallpaper, appearance) {
+                        SearchScreen(
+                            songs = songs,
+                            onBack = { nav.popBackStack() },
+                            onPlay = { list, index -> player.play(list, index) },
+                            onPlayNext = playNext,
+                            onSongOptions = openSongOptions,
+                            onOpenAlbum = { nav.navigate("album/$it") },
+                            onOpenArtist = { nav.navigate("artist/$it") },
+                        )
+                    }
+                }
+                composable(
+                    Routes.SMART,
+                    arguments = listOf(navArgument("name") { type = NavType.StringType }),
+                ) { entry ->
+                    val list = SmartList.entries.find { it.name == entry.arguments?.getString("name") } ?: SmartList.RECENTLY_ADDED
+                    val listSongs = remember(songs, plays, list) { list.songsFor(songs, plays) }
+                    AppBackground(wallpaper, appearance) {
+                        SongListScreen(
+                            title = list.label,
+                            songs = listSongs,
+                            onBack = { nav.popBackStack() },
+                            onPlay = { player.play(listSongs, it) },
+                            onShuffle = { player.shuffleAll(listSongs) },
+                            onPlayNext = playNext,
+                            onSongOptions = openSongOptions,
                         )
                     }
                 }
@@ -476,6 +565,10 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             },
             onAdd = { addToPlaylist = it },
             onDelete = deleteSongs,
+            onRemove = { playlistId, picked ->
+                app.playlists.removeSongs(playlistId, picked.map { it.id })
+                selection.clear()
+            },
         )
     }
 
@@ -531,8 +624,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
 
     newPlaylist?.let { request ->
         PlaylistNameDialog(
-            title = "New playlist",
-            initialName = "",
+            title = "Create playlist",
+            initialName = PlaylistStore.nextName(playlists),
             confirmLabel = "Create",
             onConfirm = { name ->
                 app.playlists.create(name, request.songs.map { it.id })

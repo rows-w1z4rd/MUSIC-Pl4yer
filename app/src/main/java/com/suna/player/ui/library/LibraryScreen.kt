@@ -143,9 +143,9 @@ fun LibraryScreen(
     onNewPlaylist: () -> Unit,
     onOpenSettings: () -> Unit,
     onStartSelection: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenSmart: (SmartList) -> Unit,
 ) {
-    var searching by rememberSaveable { mutableStateOf(false) }
-    var query by rememberSaveable { mutableStateOf("") }
     // The library reopens on the tab it was left on, even after the app was cleared.
     val context = LocalContext.current
     val uiPrefs = remember { context.getSharedPreferences("ui", Context.MODE_PRIVATE) }
@@ -160,41 +160,27 @@ fun LibraryScreen(
     }
     val scope = rememberCoroutineScope()
 
-    val results = remember(songs, query) {
-        val q = query.trim()
-        if (q.isEmpty()) {
-            emptyList()
-        } else {
-            songs.filter {
-                it.title.contains(q, ignoreCase = true) ||
-                    it.artist.contains(q, ignoreCase = true) ||
-                    it.album.contains(q, ignoreCase = true)
-            }
-        }
-    }
-
     // Lists scroll under the floating mini player and the system navigation bar.
     val bottomSpace = LocalMiniPlayerSpace.current +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val listPadding = PaddingValues(top = 6.dp, bottom = bottomSpace + 8.dp)
 
+    val onPlaylistsTab = tabs.getOrNull(pager.currentPage) == LibraryTab.PLAYLISTS
     val icons: @Composable () -> Unit = {
-        HintIconButton(if (searching) "Close search" else "Search", onClick = {
-            searching = !searching
-            if (!searching) query = ""
-        }) {
-            Icon(
-                if (searching) Icons.Rounded.Close else Icons.Rounded.Search,
-                contentDescription = if (searching) "Close search" else "Search",
-            )
+        if (onPlaylistsTab) {
+            HintIconButton("Create playlist", onClick = onNewPlaylist) {
+                Icon(Icons.Rounded.Add, contentDescription = "Create playlist")
+            }
+        }
+        HintIconButton("Search", onClick = onOpenSearch) {
+            Icon(Icons.Rounded.Search, contentDescription = "Search")
         }
         Box {
             var menuOpen by remember { mutableStateOf(false) }
             HintIconButton("More options", onClick = { menuOpen = true }) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "More options")
             }
-            val onSongPage = searching ||
-                tabs.getOrNull(pager.currentPage) in setOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.MOST_PLAYED, LibraryTab.RECENT)
+            val onSongPage = tabs.getOrNull(pager.currentPage) in setOf(LibraryTab.SONGS, LibraryTab.FAVORITES, LibraryTab.MOST_PLAYED, LibraryTab.RECENT)
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
@@ -235,51 +221,24 @@ fun LibraryScreen(
             }
         }
 
-        if (searching) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = if (hasHeader) 4.dp else 10.dp, bottom = 8.dp),
-            ) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    placeholder = { Text("Search tracks, artists, albums") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).padding(start = 4.dp),
-                )
-                if (!hasHeader) icons()
-            }
-        } else {
-            // The tabs span the whole width so the active one sits in the middle of the
-            // screen; the buttons float on the right, where the tabs fade out.
-            Box(Modifier.fillMaxWidth().padding(top = if (hasHeader) 4.dp else 10.dp, bottom = 8.dp)) {
-                TabBar(
-                    tabs = tabs,
-                    selected = pager.currentPage,
-                    position = { pager.currentPage + pager.currentPageOffsetFraction },
-                    onSelect = { scope.launch { pager.animateScrollToPage(it) } },
-                    endClearance = if (hasHeader) 0.dp else 100.dp,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-                if (!hasHeader) {
-                    Row(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) { icons() }
-                }
+        // The tabs span the whole width so the active one sits in the middle of the
+        // screen; the buttons float on the right, where the tabs fade out.
+        Box(Modifier.fillMaxWidth().padding(top = if (hasHeader) 4.dp else 10.dp, bottom = 8.dp)) {
+            TabBar(
+                tabs = tabs,
+                selected = pager.currentPage,
+                position = { pager.currentPage + pager.currentPageOffsetFraction },
+                onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+                endClearance = if (hasHeader) 0.dp else if (onPlaylistsTab) 148.dp else 100.dp,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            if (!hasHeader) {
+                Row(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) { icons() }
             }
         }
 
         Panel(Modifier.weight(1f)) {
             when {
-                searching && query.isNotBlank() && results.isEmpty() ->
-                    EmptyMessage("No results for \"${query.trim()}\"")
-                searching -> SongList(
-                    songs = results,
-                    onPlay = { onPlay(results, it) },
-                    onPlayNext = onPlayNext,
-                    onOptions = onSongOptions,
-                    contentPadding = listPadding,
-                )
                 !loaded -> Spacer(Modifier.fillMaxSize())
                 else -> HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
                     when (tabs.getOrNull(page)) {
@@ -292,7 +251,7 @@ fun LibraryScreen(
                         LibraryTab.ALBUMS -> AlbumGrid(songs, onOpenAlbum, bottomSpace)
                         LibraryTab.ARTISTS -> ArtistList(songs, onOpenArtist, listPadding)
                         LibraryTab.PLAYLISTS ->
-                            PlaylistList(playlists, onOpenPlaylist, onNewPlaylist, listPadding)
+                            PlaylistsPage(songs, plays, playlists, onOpenPlaylist, onOpenSmart, listPadding)
                         LibraryTab.FOLDERS -> FolderList(songs, onOpenFolder, listPadding)
                         LibraryTab.MOST_PLAYED -> StatsPage(
                             songs, plays, mostPlayed = true, onPlay, onPlayNext, onSongOptions, listPadding,
@@ -789,25 +748,94 @@ private fun FolderList(songs: List<Song>, onOpen: (String) -> Unit, padding: Pad
     }
 }
 
+/**
+ * The Playlists tab, Samsung-style: an order to sort by, a row of big cards for the lists the
+ * app keeps itself (recently added, most played, recently played), then the user's playlists
+ * with their pictures. Hearted playlists come first.
+ */
 @Composable
-private fun PlaylistList(
+private fun PlaylistsPage(
+    songs: List<Song>,
+    plays: Map<Long, SongPlays>,
     playlists: List<Playlist>,
     onOpen: (Long) -> Unit,
-    onNew: () -> Unit,
+    onOpenSmart: (SmartList) -> Unit,
     padding: PaddingValues,
 ) {
+    val context = LocalContext.current
+    val uiPrefs = remember { context.getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    var byName by remember { mutableStateOf(uiPrefs.getString(PLAYLIST_SORT, "name") == "name") }
+    val songsById = remember(songs) { songs.associateBy { it.id } }
+    val smart = remember(songs, plays) { SmartList.entries.map { it to it.songsFor(songs, plays) } }
+    val sorted = remember(playlists, byName) {
+        val order = if (byName) compareBy<Playlist>({ !it.favorite }, { it.name.lowercase() })
+        else compareBy<Playlist>({ !it.favorite }, { -it.id })
+        playlists.sortedWith(order)
+    }
+    val grey = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-        item(key = "new") {
-            SimpleRow(title = "New playlist", subtitle = null, onClick = onNew) {
-                Icon(Icons.Rounded.Add, contentDescription = null)
+        item(key = "sort") {
+            var menuOpen by remember { mutableStateOf(false) }
+            val options = listOf("Name", "Date created")
+            Box(Modifier.padding(start = 6.dp, bottom = 4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { menuOpen = true }
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                ) {
+                    SortMark(grey, Modifier.size(width = 24.dp, height = 18.dp))
+                    Text(
+                        if (byName) options[0] else options[1],
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = grey,
+                        modifier = Modifier.padding(start = 11.dp),
+                    )
+                }
+                SortMenu(
+                    expanded = menuOpen,
+                    options = options,
+                    selected = if (byName) 0 else 1,
+                    onPick = {
+                        menuOpen = false
+                        byName = it == 0
+                        uiPrefs.edit().putString(PLAYLIST_SORT, if (byName) "name" else "date").apply()
+                    },
+                    onDismiss = { menuOpen = false },
+                )
             }
         }
-        items(playlists, key = { it.id }) { playlist ->
-            SimpleRow(playlist.name, songCount(playlist.songIds.size), onClick = { onOpen(playlist.id) }) {
-                Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null)
+        item(key = "smart") {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 14.dp),
+            ) {
+                items(smart, key = { it.first.name }) { (list, listSongs) ->
+                    SmartListCard(
+                        list = list,
+                        cover = listSongs.firstOrNull()?.let { albumArtUri(it.albumId) },
+                        count = listSongs.size,
+                        onClick = { onOpenSmart(list) },
+                    )
+                }
             }
         }
-        item(key = "end") { Spacer(Modifier.height(4.dp)) }
+        if (sorted.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    "Tap + at the top to create a playlist",
+                    style = SmallLabel,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                )
+            }
+        }
+        items(sorted, key = { it.id }) { playlist ->
+            PlaylistRow(playlist, playlistCover(playlist, songsById), onClick = { onOpen(playlist.id) })
+        }
     }
 }
 
@@ -823,6 +851,7 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 
 private const val LAST_TAB = "last_tab"
 private const val SONG_SORT = "song_sort"
+private const val PLAYLIST_SORT = "playlist_sort"
 
 /** The play-all mark: solid and softly rounded (G3); false gives the outlined version (G2). */
 private const val PlayAllFilled = true

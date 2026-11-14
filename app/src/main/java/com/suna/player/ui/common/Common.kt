@@ -1,5 +1,17 @@
 package com.suna.player.ui.common
 
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.CubicBezierEasing
@@ -194,6 +206,8 @@ fun SongRow(
     onLongClick: ((Rect) -> Unit)? = null,
     /** Null when not picking songs; otherwise whether this one is picked. */
     selected: Boolean? = null,
+    /** Shown at the end of the row while picking, such as a handle to drag it. */
+    pickingTrailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val bounds = remember { arrayOf(Rect.Zero) }
@@ -253,6 +267,8 @@ fun SongRow(
                     tint = colors.onSurfaceVariant,
                 )
             }
+        } else if (pickingTrailing != null) {
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { pickingTrailing() }
         } else {
             // Keeps rows the same height as when the buttons are showing.
             Box(Modifier.size(48.dp))
@@ -270,15 +286,56 @@ fun SongList(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     info: ((Song) -> String?)? = null,
     header: (@Composable () -> Unit)? = null,
+    state: LazyListState = rememberLazyListState(),
+    /** While picking, rows get a handle to drag them; called each time a row passes another. */
+    onMove: ((from: Int, to: Int) -> Unit)? = null,
 ) {
     val selection = LocalSongSelection.current
     val longPress = LocalSongLongPress.current
     val selecting = selection?.active == true
     if (selecting) SideEffect { selection.adopt(songs) }
 
-    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
+    // The row being dragged follows the finger; it swaps places with a neighbour once it has
+    // moved past half of that neighbour.
+    val current by rememberUpdatedState(songs)
+    var dragged by remember { mutableStateOf<Long?>(null) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+
+    LazyColumn(state = state, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (header != null) item(key = "header") { header() }
         itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+            var rowHeight by remember { mutableIntStateOf(1) }
+            val handle: (@Composable () -> Unit)? = if (selecting && onMove != null) {
+                {
+                    Icon(
+                        Icons.Rounded.UnfoldMore,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp).pointerInput(song.id) {
+                            detectDragGestures(
+                                onDragStart = { dragged = song.id; dragY = 0f },
+                                onDragEnd = { dragged = null; dragY = 0f },
+                                onDragCancel = { dragged = null; dragY = 0f },
+                            ) { change, amount ->
+                                change.consume()
+                                dragY += amount.y
+                                val at = current.indexOfFirst { it.id == song.id }
+                                val step = rowHeight.toFloat()
+                                if (dragY > step / 2 && at < current.lastIndex) {
+                                    onMove(at, at + 1)
+                                    dragY -= step
+                                } else if (dragY < -step / 2 && at > 0) {
+                                    onMove(at, at - 1)
+                                    dragY += step
+                                }
+                            }
+                        },
+                    )
+                }
+            } else {
+                null
+            }
+            val lifted = dragged == song.id
             SongRow(
                 song = song,
                 onClick = { if (selecting) selection.toggle(song) else onPlay(index) },
@@ -293,6 +350,15 @@ fun SongList(
                     }
                 },
                 selected = if (selecting) song.id in selection.ids else null,
+                pickingTrailing = handle,
+                modifier = Modifier
+                    .onSizeChanged { rowHeight = it.height }
+                    .zIndex(if (lifted) 1f else 0f)
+                    .graphicsLayer {
+                        translationY = if (lifted) dragY else 0f
+                        shadowElevation = if (lifted) 8.dp.toPx() else 0f
+                    }
+                    .then(if (lifted) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
             )
         }
     }

@@ -195,6 +195,41 @@ class PlaybackService : MediaSessionService() {
         return true
     }
 
+    /**
+     * "Play next" puts tracks right after the current one in the queue. In shuffle mode the
+     * player follows its own shuffled order instead, where new tracks land at random; this moves
+     * them to come straight after the current track in that order too. Does nothing when the
+     * order is already right, so it can run after every queue change.
+     */
+    private fun keepPlayNextUpNext() {
+        if (!player.shuffleModeEnabled || player.mediaItemCount < 2) return
+        val current = player.currentMediaItemIndex
+        val upNext = ArrayList<Int>()
+        var i = current + 1
+        while (i < player.mediaItemCount && player.getMediaItemAt(i).isPlayNext()) upNext += i++
+        if (upNext.isEmpty()) return
+        val order = shuffleSequence()
+        val rest = order.filter { it !in upNext }
+        val at = rest.indexOf(current)
+        if (at < 0) return
+        val wanted = rest.take(at + 1) + upNext + rest.drop(at + 1)
+        if (wanted != order) {
+            player.setShuffleOrder(DefaultShuffleOrder(wanted.toIntArray(), System.nanoTime()))
+        }
+    }
+
+    /**
+     * A "play next" track that has been played is an ordinary queue track again; otherwise in
+     * shuffle mode it would keep being pulled up to play next.
+     */
+    private fun clearPlayNext(index: Int, mediaId: String) {
+        if (index !in 0 until player.mediaItemCount) return
+        val item = player.getMediaItemAt(index)
+        if (item.mediaId == mediaId && item.isPlayNext()) {
+            player.replaceMediaItem(index, item.withPlayNext(false))
+        }
+    }
+
     /** Queue positions in the order shuffle mode plays them. */
     private fun shuffleSequence(): List<Int> {
         val timeline = player.currentTimeline
@@ -271,6 +306,9 @@ class PlaybackService : MediaSessionService() {
             if (events.contains(Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) {
                 store.shuffle = player.shuffleModeEnabled
             }
+            if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) {
+                keepPlayNextUpNext()
+            }
             if (events.containsAny(
                     Player.EVENT_TIMELINE_CHANGED,
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
@@ -293,6 +331,7 @@ class PlaybackService : MediaSessionService() {
             val item = oldPosition.mediaItem ?: return
             val finished = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
             val left = oldPosition.mediaItemIndex != newPosition.mediaItemIndex
+            if (left) clearPlayNext(oldPosition.mediaItemIndex, item.mediaId)
             if (repeatsLeft > 0) {
                 when {
                     // One more time through the same track.

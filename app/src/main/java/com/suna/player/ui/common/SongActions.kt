@@ -1,5 +1,6 @@
 package com.suna.player.ui.common
 
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import android.app.Activity
 import android.content.ClipData
 import android.content.Context
@@ -138,6 +139,8 @@ fun BoxScope.SelectionBottomBar(
     onPlay: (List<Song>) -> Unit,
     onAdd: (List<Song>) -> Unit,
     onDelete: (List<Song>) -> Unit,
+    /** Editing a playlist: takes the picked songs out of it (shown in place of Delete). */
+    onRemove: (playlistId: Long, List<Song>) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     AnimatedVisibility(
@@ -158,7 +161,14 @@ fun BoxScope.SelectionBottomBar(
             BarAction(Icons.Rounded.PlayArrow, "Play", enabled) { onPlay(selection.selected) }
             BarAction(Icons.Rounded.Add, "Add", enabled) { onAdd(selection.selected) }
             BarAction(Icons.Rounded.Share, "Share", enabled) { shareSongs(context, selection.selected) }
-            BarAction(Icons.Rounded.Delete, "Delete", enabled) { onDelete(selection.selected) }
+            val playlistId = selection.playlistId
+            if (playlistId != null) {
+                BarAction(Icons.Rounded.RemoveCircleOutline, "Remove", enabled) {
+                    onRemove(playlistId, selection.selected)
+                }
+            } else {
+                BarAction(Icons.Rounded.Delete, "Delete", enabled) { onDelete(selection.selected) }
+            }
         }
     }
 }

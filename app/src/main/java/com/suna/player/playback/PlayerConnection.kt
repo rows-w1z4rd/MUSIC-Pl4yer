@@ -162,6 +162,7 @@ class PlayerConnection(private val context: Context) {
             c.getMediaItemAt(it).isPlayNext()
         }
         c.addMediaItems(index, songs.map { it.toMediaItem(playNext = true) })
+        _notices.tryEmit(if (songs.size == 1) "\"${songs[0].title}\" will play next" else "${songs.size} tracks will play next")
     }
 
     fun addToQueue(songs: List<Song>) {
@@ -172,6 +173,7 @@ class PlayerConnection(private val context: Context) {
             return
         }
         c.addMediaItems(songs.map { it.toMediaItem() })
+        _notices.tryEmit(if (songs.size == 1) "Added to the queue" else "${songs.size} tracks added to the queue")
     }
 
     fun playQueueItem(index: Int) {

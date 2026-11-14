@@ -22,15 +22,20 @@ class SongSelection {
     var scope by mutableStateOf(emptyList<Song>())
         private set
 
+    /** Set when editing a playlist: the bar then offers Remove (from it) instead of Delete. */
+    var playlistId by mutableStateOf<Long?>(null)
+        private set
+
     val count: Int get() = ids.size
     val allSelected: Boolean get() = scope.isNotEmpty() && ids.size == scope.size
 
     /** The picked songs, in the order they appear on screen. */
     val selected: List<Song> get() = scope.filter { it.id in ids }
 
-    fun start(songs: List<Song>, first: Song?) {
+    fun start(songs: List<Song>, first: Song?, playlistId: Long? = null) {
         scope = songs
         ids = setOfNotNull(first?.id)
+        this.playlistId = playlistId
         active = true
     }
 
@@ -53,6 +58,7 @@ class SongSelection {
         active = false
         ids = emptySet()
         scope = emptyList()
+        playlistId = null
     }
 }
 

@@ -2,6 +2,7 @@ package com.suna.player.data
 
 import android.content.Context
 import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -18,6 +19,10 @@ data class PlaylistEntity(
     @PrimaryKey val id: Long,
     val name: String,
     val createdAt: Long,
+    /** Hearted playlists are listed first. */
+    @ColumnInfo(defaultValue = "0") val favorite: Boolean = false,
+    /** A picture the user chose, copied into the app's storage; null shows the first track's art. */
+    val cover: String? = null,
 )
 
 /** One song in one playlist; [position] keeps the user's order. */
@@ -85,6 +90,15 @@ interface PlaylistDao {
     @Query("UPDATE playlists SET name = :name WHERE id = :id")
     suspend fun rename(id: Long, name: String)
 
+    @Query("UPDATE playlists SET favorite = :favorite WHERE id = :id")
+    suspend fun setFavorite(id: Long, favorite: Boolean)
+
+    @Query("UPDATE playlists SET cover = :cover WHERE id = :id")
+    suspend fun setCover(id: Long, cover: String?)
+
+    @Query("SELECT cover FROM playlists WHERE id = :id")
+    suspend fun cover(id: Long): String?
+
     @Query("DELETE FROM playlists WHERE id = :id")
     suspend fun deletePlaylist(id: Long)
 
@@ -123,6 +137,13 @@ interface PlaylistDao {
     suspend fun append(id: Long, songId: Long) {
         insertSong(id, songId, lastPosition(id) + 1)
     }
+
+    /** Rewrites the playlist's order to exactly [songIds]. */
+    @Transaction
+    suspend fun reorder(id: Long, songIds: List<Long>) {
+        clearSongs(id)
+        songIds.distinct().forEachIndexed { i, songId -> insertSong(id, songId, i) }
+    }
 }
 
 data class SongPlays(val songId: Long, val playCount: Int, val lastPlayedAt: Long)
@@ -157,8 +178,8 @@ interface StatsDao {
         PlayEventEntity::class,
         FavoriteEntity::class,
     ],
-    version = 2,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    version = 3,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class SunaDb : RoomDatabase() {
     abstract fun playlists(): PlaylistDao
