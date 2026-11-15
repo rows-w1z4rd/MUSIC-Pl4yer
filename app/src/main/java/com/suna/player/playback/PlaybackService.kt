@@ -86,6 +86,7 @@ class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(SessionCallback())
+            .setBitmapLoader(TrackBitmapLoader(this))
             .build()
 
         // Tells the phone's sound effects (Samsung's "Sound quality and effects", an equalizer

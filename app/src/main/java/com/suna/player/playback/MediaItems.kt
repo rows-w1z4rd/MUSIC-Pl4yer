@@ -29,6 +29,9 @@ fun buildMediaItem(
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
+                // The track itself: the session's loader reads its picture (see TrackBitmapLoader),
+                // so the lock screen shows the same cover as the app.
+                .setArtworkUri(uri)
                 .setExtras(
                     Bundle().apply {
                         putBoolean(EXTRA_PLAY_NEXT, playNext)
