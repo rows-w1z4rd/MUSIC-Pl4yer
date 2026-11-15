@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.TrackArt
 import androidx.compose.runtime.SideEffect
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.ui.graphics.StrokeCap
@@ -840,7 +841,7 @@ private fun PlaylistsPage(
                 items(smart, key = { it.first.name }) { (list, listSongs) ->
                     SmartListCard(
                         list = list,
-                        cover = listSongs.firstOrNull()?.let { albumArtUri(it.albumId) },
+                        cover = listSongs.firstOrNull()?.let { TrackArt(it.uri) },
                         count = listSongs.size,
                         onClick = { onOpenSmart(list) },
                         enabled = !selection.active,

@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.TrackArt
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.rounded.Edit
@@ -65,7 +66,7 @@ fun SongDetailsSheet(song: Song, plays: SongPlays?, onDismiss: () -> Unit, onEdi
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
-            Artwork(albumArtUri(song.albumId), Modifier.size(132.dp), corner = 16.dp)
+            Artwork(TrackArt(song.uri), Modifier.size(132.dp), corner = 16.dp)
             Text(
                 song.title,
                 fontSize = 20.sp,

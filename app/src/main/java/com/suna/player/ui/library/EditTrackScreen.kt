@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.TrackArt
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -186,7 +187,7 @@ fun EditTrackScreen(
                     if (bitmap != null) {
                         Image(bitmap, contentDescription = "Cover", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     } else {
-                        Artwork(albumArtUri(song.albumId), Modifier.fillMaxSize(), corner = 28.dp)
+                        Artwork(TrackArt(song.uri), Modifier.fillMaxSize(), corner = 28.dp)
                     }
                     Box(
                         contentAlignment = Alignment.Center,

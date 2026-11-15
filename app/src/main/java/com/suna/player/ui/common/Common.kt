@@ -136,7 +136,7 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier = composed {
 }
 
 @Composable
-fun Artwork(uri: Uri?, modifier: Modifier = Modifier, corner: Dp = 8.dp) {
+fun Artwork(uri: Any?, modifier: Modifier = Modifier, corner: Dp = 8.dp) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(corner))
@@ -228,7 +228,7 @@ fun SongRow(
                 modifier = Modifier.padding(end = 14.dp).size(24.dp),
             )
         }
-        Artwork(albumArtUri(song.albumId), Modifier.size(48.dp))
+        Artwork(TrackArt(song.uri), Modifier.size(48.dp))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
             Text(
                 song.title,

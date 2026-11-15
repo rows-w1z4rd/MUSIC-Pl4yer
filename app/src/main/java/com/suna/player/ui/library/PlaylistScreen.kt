@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.TrackArt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
@@ -78,8 +79,8 @@ import com.suna.player.ui.common.songCount
 import com.suna.player.ui.theme.SmallLabel
 
 /** The picture for a playlist: its own cover if one was chosen, else its first track's art. */
-fun playlistCover(playlist: Playlist, songsById: Map<Long, Song>): Uri? =
-    playlist.cover ?: playlist.songIds.firstNotNullOfOrNull { songsById[it] }?.let { albumArtUri(it.albumId) }
+fun playlistCover(playlist: Playlist, songsById: Map<Long, Song>): Any? =
+    playlist.cover ?: playlist.songIds.firstNotNullOfOrNull { songsById[it] }?.let { TrackArt(it.uri) }
 
 /**
  * One playlist, laid out like Samsung Music: the cover, name and track count on top, then a
@@ -89,7 +90,7 @@ fun playlistCover(playlist: Playlist, songsById: Map<Long, Song>): Uri? =
 fun PlaylistScreen(
     playlist: Playlist,
     songs: List<Song>,
-    cover: Uri?,
+    cover: Any?,
     onBack: () -> Unit,
     onPlay: (index: Int) -> Unit,
     onShuffle: () -> Unit,
@@ -307,7 +308,7 @@ fun AddTracksScreen(
 @Composable
 fun PlaylistRow(
     playlist: Playlist,
-    cover: Uri?,
+    cover: Any?,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     /** Null when not picking; otherwise whether this one is picked. */
@@ -347,7 +348,7 @@ fun PlaylistRow(
 
 /** A big square card for a smart list, like Samsung's "Most played". */
 @Composable
-fun SmartListCard(list: SmartList, cover: Uri?, count: Int, onClick: () -> Unit, enabled: Boolean = true) {
+fun SmartListCard(list: SmartList, cover: Any?, count: Int, onClick: () -> Unit, enabled: Boolean = true) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         // Dimmed and inactive while picking playlists, as in Samsung Music.

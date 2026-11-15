@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.TrackArt
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -186,7 +187,7 @@ private fun LiftedRow(song: Song, modifier: Modifier) {
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 14.dp),
     ) {
-        Artwork(albumArtUri(song.albumId), Modifier.size(48.dp))
+        Artwork(TrackArt(song.uri), Modifier.size(48.dp))
         Column(Modifier.padding(horizontal = 14.dp)) {
             Text(song.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(

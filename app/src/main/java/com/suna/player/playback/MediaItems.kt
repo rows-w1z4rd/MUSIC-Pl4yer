@@ -5,7 +5,6 @@ import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.suna.player.data.Song
-import com.suna.player.data.notificationArtUri
 
 private const val EXTRA_PLAY_NEXT = "suna.playNext"
 private const val EXTRA_ALBUM_ID = "suna.albumId"
@@ -30,7 +29,6 @@ fun buildMediaItem(
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
-                .setArtworkUri(notificationArtUri(albumId))
                 .setExtras(
                     Bundle().apply {
                         putBoolean(EXTRA_PLAY_NEXT, playNext)

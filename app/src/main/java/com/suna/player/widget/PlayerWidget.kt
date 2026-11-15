@@ -1,5 +1,7 @@
 package com.suna.player.widget
 
+import com.suna.player.playback.playableUri
+import android.net.Uri
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -15,17 +17,15 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.PlaybackPendingIntentBuilder
 import com.suna.player.MainActivity
 import com.suna.player.R
-import com.suna.player.data.albumArtUri
 import com.suna.player.playback.PlaybackService
 import com.suna.player.playback.QueueStore
-import com.suna.player.playback.albumId
 
-data class WidgetInfo(val title: String, val artist: String, val albumId: Long)
+data class WidgetInfo(val title: String, val artist: String, val trackUri: Uri?)
 
 fun MediaItem.toWidgetInfo() = WidgetInfo(
     title = mediaMetadata.title?.toString() ?: "Unknown title",
     artist = mediaMetadata.artist?.toString() ?: "Unknown artist",
-    albumId = albumId(),
+    trackUri = playableUri(),
 )
 
 /**
@@ -56,7 +56,7 @@ class PlayerWidget : AppWidgetProvider() {
 
 @androidx.annotation.OptIn(UnstableApi::class)
 object WidgetRenderer {
-    private var artAlbumId = Long.MIN_VALUE
+    private var artTrack: Uri? = null
     private var art: Bitmap? = null
 
     /** What was last drawn, for widgets added while music is already playing. */
@@ -76,7 +76,7 @@ object WidgetRenderer {
         views.setTextViewText(R.id.widget_title, info?.title ?: context.getString(R.string.app_name))
         views.setTextViewText(R.id.widget_artist, info?.artist ?: "Tap to open")
 
-        val bitmap = info?.let { loadArt(context, it.albumId) }
+        val bitmap = info?.let { loadArt(context, it.trackUri) }
         if (bitmap != null) {
             views.setImageViewBitmap(R.id.widget_art, bitmap)
         } else {
@@ -114,19 +114,17 @@ object WidgetRenderer {
             .setStartAsForegroundService(foreground)
             .build()
 
-    /** Small enough to stay well under the widget size limit; reused while the album repeats. */
-    private fun loadArt(context: Context, albumId: Long): Bitmap? {
-        if (albumId == artAlbumId) return art
-        val loaded = if (albumId < 0) {
-            null
-        } else {
+    /** The track's own cover, small enough for the widget; reused while the track repeats. */
+    private fun loadArt(context: Context, trackUri: Uri?): Bitmap? {
+        if (trackUri == artTrack) return art
+        val loaded = trackUri?.let {
             try {
-                context.contentResolver.loadThumbnail(albumArtUri(albumId), Size(320, 320), null)
+                context.contentResolver.loadThumbnail(it, Size(320, 320), null)
             } catch (_: Exception) {
                 null
             }
         }
-        artAlbumId = albumId
+        artTrack = trackUri
         art = loaded
         return loaded
     }

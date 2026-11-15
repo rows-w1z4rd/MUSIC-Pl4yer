@@ -1,5 +1,10 @@
 package com.suna.player
 
+import com.suna.player.ui.common.TrackArtKeyer
+import com.suna.player.ui.common.TrackArtFetcher
+import coil3.SingletonImageLoader
+import coil3.PlatformContext
+import coil3.ImageLoader
 import com.suna.player.data.LyricsRepository
 import com.suna.player.data.TagEditor
 import android.app.Application
@@ -13,7 +18,7 @@ import com.suna.player.data.WallpaperStore
 import com.suna.player.playback.PlayerConnection
 
 /** App-wide objects, created on first use. */
-class SunaApp : Application() {
+class SunaApp : Application(), SingletonImageLoader.Factory {
     val db by lazy { SunaDb.open(this) }
     val library by lazy { MediaStoreRepository(this) }
     val player by lazy { PlayerConnection(this) }
@@ -24,4 +29,12 @@ class SunaApp : Application() {
     val favorites by lazy { FavoritesStore(db) }
     val tagEditor by lazy { TagEditor(this) }
     val lyrics by lazy { LyricsRepository(this, settings) }
+
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .components {
+                add(TrackArtFetcher.Factory())
+                add(TrackArtKeyer())
+            }
+            .build()
 }

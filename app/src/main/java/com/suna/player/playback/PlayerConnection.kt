@@ -1,5 +1,6 @@
 package com.suna.player.playback
 
+import com.suna.player.ui.common.TrackArt
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,7 +26,8 @@ data class QueueEntry(
     val mediaId: String,
     val title: String,
     val artist: String,
-    val artUri: Uri?,
+    /** The track's own cover, for the image loader. */
+    val artUri: Any?,
     val playNext: Boolean,
 )
 
@@ -280,12 +282,11 @@ class PlayerConnection(private val context: Context) {
 }
 
 private fun MediaItem.toEntry(): QueueEntry {
-    val albumId = albumId()
     return QueueEntry(
         mediaId = mediaId,
         title = mediaMetadata.title?.toString() ?: "Unknown title",
         artist = mediaMetadata.artist?.toString() ?: "Unknown artist",
-        artUri = if (albumId >= 0) albumArtUri(albumId) else null,
+        artUri = playableUri()?.let { TrackArt(it) },
         playNext = isPlayNext(),
     )
 }

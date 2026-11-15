@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.TrackArt
 import androidx.compose.material.icons.rounded.Edit
 import android.app.SearchManager
 import android.content.ActivityNotFoundException
@@ -107,7 +108,7 @@ fun SongOptionsSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
             ) {
-                Artwork(albumArtUri(song.albumId), Modifier.size(56.dp), corner = 10.dp)
+                Artwork(TrackArt(song.uri), Modifier.size(56.dp), corner = 10.dp)
                 Column(Modifier.padding(start = 14.dp)) {
                     Text(
                         song.title,

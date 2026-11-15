@@ -1,5 +1,6 @@
 package com.suna.player.ui.settings
 
+import com.suna.player.ui.common.TrackArt
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -380,7 +381,7 @@ private fun MiniBarMock(song: Song, modifier: Modifier) {
             .border(1.dp, borderColor(), shape)
             .padding(8.dp),
     ) {
-        Artwork(albumArtUri(song.albumId), Modifier.size(48.dp), corner = 12.dp)
+        Artwork(TrackArt(song.uri), Modifier.size(48.dp), corner = 12.dp)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
