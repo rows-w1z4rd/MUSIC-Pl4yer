@@ -60,7 +60,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -550,7 +549,7 @@ private fun SortMark(tint: Color, modifier: Modifier = Modifier) {
 
 /** Samsung-style list of orders: rounded card, the current one in the accent with a check. */
 @Composable
-private fun SortMenu(
+internal fun SortMenu(
     expanded: Boolean,
     options: List<String>,
     selected: Int,
@@ -772,9 +771,10 @@ private fun FolderList(songs: List<Song>, onOpen: (String) -> Unit, padding: Pad
 }
 
 /**
- * The Playlists tab, Samsung-style: an order to sort by, a row of big cards for the lists the
- * app keeps itself (recently added, most played, recently played), then the user's playlists
- * with their pictures. Hearted playlists come first.
+ * The Playlists tab, Samsung-style: an order to sort by, then two sections, the lists the app
+ * keeps itself (recently added, most played, recently played) and the user's playlists. Each
+ * section folds away with its arrow and shows as rows, a two-column grid or a scrolling row;
+ * both choices are remembered. Hearted playlists come first.
  */
 @Composable
 private fun PlaylistsPage(
@@ -798,6 +798,11 @@ private fun PlaylistsPage(
     }
     SideEffect { selection.adopt(sorted.map { it.id }) }
     val grey = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    // How each section looks, and whether it is folded away; remembered between launches.
+    var smartView by remember { mutableStateOf(sectionView(uiPrefs.getString(SMART_VIEW, null), SectionView.SCROLL)) }
+    var mineView by remember { mutableStateOf(sectionView(uiPrefs.getString(MINE_VIEW, null), SectionView.ROWS)) }
+    var smartOpen by remember { mutableStateOf(uiPrefs.getBoolean(SMART_OPEN, true)) }
+    var mineOpen by remember { mutableStateOf(uiPrefs.getBoolean(MINE_OPEN, true)) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
         item(key = "sort") {
             var menuOpen by remember { mutableStateOf(false) }
@@ -832,40 +837,81 @@ private fun PlaylistsPage(
                 )
             }
         }
-        item(key = "smart") {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 14.dp),
-            ) {
-                items(smart, key = { it.first.name }) { (list, listSongs) ->
-                    SmartListCard(
-                        list = list,
+        item(key = "smart-head") {
+            SectionHeader(
+                title = "Smart lists",
+                count = null,
+                open = smartOpen,
+                onToggle = {
+                    smartOpen = !smartOpen
+                    uiPrefs.edit().putBoolean(SMART_OPEN, smartOpen).apply()
+                },
+                view = smartView,
+                onView = {
+                    smartView = it
+                    uiPrefs.edit().putString(SMART_VIEW, it.name).apply()
+                },
+            )
+        }
+        if (smartOpen) {
+            sectionItems(
+                id = "smart",
+                view = smartView,
+                tiles = smart.map { (list, listSongs) ->
+                    PlaylistTile(
+                        key = list.name,
+                        title = list.label,
+                        subtitle = songCount(listSongs.size),
                         cover = listSongs.firstOrNull()?.let { TrackArt(it.uri) },
-                        count = listSongs.size,
-                        onClick = { onOpenSmart(list) },
+                        // Dimmed and inactive while picking playlists, as in Samsung Music.
                         enabled = !selection.active,
+                        onClick = { onOpenSmart(list) },
+                    )
+                },
+            )
+        }
+        item(key = "mine-head") {
+            SectionHeader(
+                title = "My playlists",
+                count = sorted.size,
+                open = mineOpen,
+                onToggle = {
+                    mineOpen = !mineOpen
+                    uiPrefs.edit().putBoolean(MINE_OPEN, mineOpen).apply()
+                },
+                view = mineView,
+                onView = {
+                    mineView = it
+                    uiPrefs.edit().putString(MINE_VIEW, it.name).apply()
+                },
+            )
+        }
+        if (mineOpen) {
+            if (sorted.isEmpty()) {
+                item(key = "empty") {
+                    Text(
+                        "Tap + at the top to create a playlist",
+                        style = SmallLabel,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                     )
                 }
             }
-        }
-        if (sorted.isEmpty()) {
-            item(key = "empty") {
-                Text(
-                    "Tap + at the top to create a playlist",
-                    style = SmallLabel,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                )
-            }
-        }
-        items(sorted, key = { it.id }) { playlist ->
-            PlaylistRow(
-                playlist = playlist,
-                cover = playlistCover(playlist, songsById),
-                onClick = { if (selection.active) selection.toggle(playlist.id) else onOpen(playlist.id) },
-                onLongClick = { if (selection.active) selection.toggle(playlist.id) else selection.start(playlist.id) },
-                selected = if (selection.active) playlist.id in selection.ids else null,
+            sectionItems(
+                id = "mine",
+                view = mineView,
+                tiles = sorted.map { playlist ->
+                    PlaylistTile(
+                        key = playlist.id,
+                        title = playlist.name,
+                        subtitle = songCount(playlist.songIds.size),
+                        cover = playlistCover(playlist, songsById),
+                        favorite = playlist.favorite,
+                        selected = if (selection.active) playlist.id in selection.ids else null,
+                        onClick = { if (selection.active) selection.toggle(playlist.id) else onOpen(playlist.id) },
+                        onLongClick = { if (selection.active) selection.toggle(playlist.id) else selection.start(playlist.id) },
+                    )
+                },
             )
         }
     }
@@ -884,6 +930,13 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 private const val LAST_TAB = "last_tab"
 private const val SONG_SORT = "song_sort"
 private const val PLAYLIST_SORT = "playlist_sort"
+private const val SMART_VIEW = "playlists_smart_view"
+private const val MINE_VIEW = "playlists_mine_view"
+private const val SMART_OPEN = "playlists_smart_open"
+private const val MINE_OPEN = "playlists_mine_open"
+
+private fun sectionView(name: String?, default: SectionView) =
+    SectionView.entries.firstOrNull { it.name == name } ?: default
 
 /** The play-all mark: solid and softly rounded (G3); false gives the outlined version (G2). */
 private const val PlayAllFilled = true
