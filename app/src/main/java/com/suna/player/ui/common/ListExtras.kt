@@ -275,17 +275,21 @@ fun BoxScope.ListScrollExtras(
         derivedStateOf { state.layoutInfo.visibleItemsInfo.any { it.index == playingIndex } }
     }
     var showGuitar by remember { mutableStateOf(false) }
-    LaunchedEffect(elapsed, playingVisible, playingIndex) {
+    // He comes in with the slider (so the Scroll slider setting decides when), as long as the
+    // playing track is in this list and off screen; he's gone the moment it's in view.
+    LaunchedEffect(showSlider, playingVisible, playingIndex) {
         if (playingIndex < 0 || playingVisible) {
             showGuitar = false
-        } else if (elapsed >= 2000 && !jumping) {
+        } else if (showSlider && !jumping) {
             showGuitar = true
         }
     }
-    // It goes away a few seconds after scrolling stops.
-    LaunchedEffect(showGuitar, active) {
-        if (showGuitar && !active) {
-            delay(4000)
+    // He stays about 3 s after the list comes to rest (the slider goes after 1.5 s), so there's
+    // time to reach him. Scrolling again starts the count over.
+    val scrolling = state.isScrollInProgress || dragging
+    LaunchedEffect(showGuitar, scrolling) {
+        if (showGuitar && !scrolling) {
+            delay(3000)
             showGuitar = false
         }
     }
