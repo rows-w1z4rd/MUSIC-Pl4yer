@@ -1,5 +1,7 @@
 package com.suna.player
 
+import com.suna.player.ui.common.LocalJumpColor
+import com.suna.player.data.JumpColor
 import com.suna.player.ui.common.NowPlaying
 import com.suna.player.ui.common.LocalSliderMode
 import com.suna.player.ui.common.LocalNowPlaying
@@ -216,6 +218,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val playSource by player.source.collectAsStateWithLifecycle()
     val listStyle by app.settings.listStyle.collectAsStateWithLifecycle(initialValue = ListStyle.INSET)
     val sliderMode by app.settings.sliderMode.collectAsStateWithLifecycle(initialValue = SliderMode.SCROLLING)
+    val jumpColor by app.settings.jumpColor.collectAsStateWithLifecycle(initialValue = JumpColor.THEME)
     // Every track, hidden ones too: playlists still show them.
     val songsById = remember(allSongs) { allSongs.associateBy { it.id } }
     val hideSong: (Song) -> Unit = { song ->
@@ -285,6 +288,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             ),
             LocalListStyle provides listStyle,
             LocalSliderMode provides sliderMode,
+            LocalJumpColor provides jumpColor,
         ) {
             // Pages slide side by side, never fading, and never overlap, so the wallpaper stays
             // still behind them.

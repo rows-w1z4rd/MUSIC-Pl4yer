@@ -1,5 +1,7 @@
 package com.suna.player.ui.settings
 
+import androidx.compose.material.icons.rounded.MyLocation
+import com.suna.player.data.JumpColor
 import androidx.compose.material3.OutlinedButton
 import com.suna.player.data.Song
 import com.suna.player.data.SliderMode
@@ -135,6 +137,7 @@ private enum class Page(val title: String) {
     HIDDEN("Hidden tracks"),
     LIST_STYLE("List style"),
     SLIDER("Scroll slider"),
+    JUMP("Jump button"),
 }
 
 @Composable
@@ -200,6 +203,16 @@ fun SettingsScreen(
                             footer = "The slider at the side of long lists: drag it to glide through them. " +
                                 "It can show as soon as you scroll, or only after you've been scrolling a while.",
                         ) { i -> save { setSliderMode(SliderMode.entries[i]) } }
+                    }
+                    Page.JUMP -> {
+                        val color by settings.jumpColor.collectAsStateWithLifecycle(initialValue = JumpColor.THEME)
+                        ChoicePage(
+                            options = JumpColor.entries.map { it.label },
+                            selected = color.ordinal,
+                            footer = "The figure from the app icon that shows up after a while of scrolling and " +
+                                "takes you back to the track that's playing. He can take the theme's colour, " +
+                                "so he follows your wallpaper, or keep his own.",
+                        ) { i -> save { setJumpColor(JumpColor.entries[i]) } }
                     }
                 }
             }
@@ -464,6 +477,7 @@ private fun MainPage(
 
     val listStyle by settings.listStyle.collectAsStateWithLifecycle(initialValue = ListStyle.INSET)
     val sliderMode by settings.sliderMode.collectAsStateWithLifecycle(initialValue = SliderMode.SCROLLING)
+    val jumpColor by settings.jumpColor.collectAsStateWithLifecycle(initialValue = JumpColor.THEME)
     Group("Library") {
         SettingRow(
             Icons.Rounded.Tab,
@@ -483,6 +497,18 @@ private fun MainPage(
             "Scroll slider",
             if (sliderMode == SliderMode.SCROLLING) "While scrolling" else "After 2 s",
             onClick = { open(Page.SLIDER) },
+        )
+        RowDivider()
+        SettingRow(
+            Icons.Rounded.MyLocation,
+            Green,
+            "Jump button",
+            when (jumpColor) {
+                JumpColor.THEME -> "Theme"
+                JumpColor.ORIGINAL -> "Original"
+                JumpColor.WHITE -> "White"
+            },
+            onClick = { open(Page.JUMP) },
         )
     }
 

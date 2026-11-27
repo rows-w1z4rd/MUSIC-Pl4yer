@@ -26,6 +26,13 @@ enum class ListStyle(val label: String) {
     FULL("Full width"),
 }
 
+/** The colour of the figure that takes you back to the playing track. */
+enum class JumpColor(val label: String) {
+    THEME("Match the theme"),
+    ORIGINAL("Original (as on the app icon)"),
+    WHITE("White"),
+}
+
 /** When the fast-scroll slider at the side of long lists shows up. */
 enum class SliderMode(val label: String) {
     SCROLLING("While scrolling"),
@@ -237,6 +244,14 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[SLIDER_MODE] = mode.name }
     }
 
+    val jumpColor: Flow<JumpColor> = context.dataStore.data
+        .map { p -> JumpColor.entries.find { it.name == p[JUMP_COLOR] } ?: JumpColor.THEME }
+        .distinctUntilChanged()
+
+    suspend fun setJumpColor(color: JumpColor) {
+        context.dataStore.edit { it[JUMP_COLOR] = color.name }
+    }
+
     val audioOffload: Flow<Boolean> =
         context.dataStore.data.map { it[AUDIO_OFFLOAD] ?: false }.distinctUntilChanged()
 
@@ -284,6 +299,7 @@ class SettingsStore(private val context: Context) {
         private val LYRICS_FOLDER = stringPreferencesKey("lyrics_folder")
         private val LIST_STYLE = stringPreferencesKey("list_style")
         private val SLIDER_MODE = stringPreferencesKey("slider_mode")
+        private val JUMP_COLOR = stringPreferencesKey("jump_color")
         private val ENDLESS_PLAY = booleanPreferencesKey("endless_play")
     }
 }

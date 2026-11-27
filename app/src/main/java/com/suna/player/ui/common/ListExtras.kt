@@ -1,7 +1,19 @@
 package com.suna.player.ui.common
 
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.drawscope.withTransform
+import com.suna.player.R
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.foundation.Image
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import com.suna.player.data.JumpColor
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -10,9 +22,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,12 +50,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathOperation
-import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -66,6 +71,7 @@ data class NowPlaying(val songId: Long? = null, val playing: Boolean = false, va
 val LocalNowPlaying = compositionLocalOf { NowPlaying() }
 val LocalListStyle = compositionLocalOf { ListStyle.INSET }
 val LocalSliderMode = compositionLocalOf { SliderMode.SCROLLING }
+val LocalJumpColor = compositionLocalOf { JumpColor.THEME }
 
 /**
  * Samsung Music's "now playing" mark: three little columns of dots that rise and fall while
@@ -94,90 +100,72 @@ fun PlayingBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** A smooth closed shape through [pts] (a Catmull-Rom curve), on a grid scaled by [k]. */
-private fun smooth(pts: List<Pair<Float, Float>>, k: Float): Path = Path().apply {
-    val n = pts.size
-    fun p(i: Int) = pts[(i + n) % n].let { Offset(it.first * k, it.second * k) }
-    moveTo(p(0).x, p(0).y)
-    for (i in 0 until n) {
-        val p0 = p(i - 1); val p1 = p(i); val p2 = p(i + 1); val p3 = p(i + 2)
-        val c1 = p1 + (p2 - p0) / 6f
-        val c2 = p2 - (p3 - p1) / 6f
-        cubicTo(c1.x, c1.y, c2.x, c2.y, p2.x, p2.y)
-    }
-    close()
-}
+/** The app icon's figure, cut out of the icon's empty margin, and how bright its colour gets. */
+private class IconArt(val bitmap: ImageBitmap, val brightest: Int)
 
-private val GuitarBody = listOf(
-    30f to 104f, 25f to 100f, 22f to 90f, 16f to 90f, 11f to 99f, 10f to 112f, 13f to 124f, 9f to 136f, 10f to 150f,
-    19f to 159f, 33f to 161f, 48f to 158f, 55f to 149f, 55f to 137f, 51f to 126f, 54f to 114f, 53f to 101f, 48f to 94f,
-    42f to 99f, 35f to 104f,
-)
-private val GuitarGuard = listOf(
-    30f to 103f, 26f to 103f, 22f to 107f, 19f to 115f, 21f to 124f, 17f to 134f, 19f to 145f, 27f to 150f, 34f to 148f,
-    40f to 152f, 48f to 147f, 49f to 136f, 45f to 126f, 48f to 114f, 45f to 105f, 39f to 104f, 35f to 103f,
-)
-private val GuitarHead = listOf(
-    29.6f to 30f, 29f to 18f, 30.5f to 8f, 34f to 2f, 40f to 0f, 45f to 3f, 45f to 8f, 41f to 11f, 37f to 15f,
-    35.6f to 22f, 35.4f to 30f,
-)
-
-/**
- * The jump-back button: a detailed electric guitar (double-cut body, pickguard, three pickups,
- * knobs, frets and tuners), all in shades of the theme's accent so it follows the wallpaper's
- * colours, with a glossy body and a soft shadow.
- */
+/** Loads the launcher icon's own art (ic_launcher_foreground) once, untouched, trimmed to his outline. */
 @Composable
-fun RockGuitar(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        // Drawn upright on a 64 x 164 grid, then tilted so the headstock points up and right.
-        val k = size.minDimension / 150f
-        val ink = Color(0xFF141210)
-        val dark = lerp(color, ink, 0.72f)
-        val gloss = lerp(color, ink, 0.4f)
-        val guard = lerp(color, Color(0xFFFAF8F4), 0.82f)
-        val metal = lerp(color, Color(0xFFEBEBEE), 0.7f)
-        val wood = lerp(color, Color(0xFF5A3C1E), 0.35f)
-        val board = lerp(color, Color(0xFF28190F), 0.6f)
-        val body = smooth(GuitarBody, k)
-        withTransform({
-            rotate(38f, pivot = center)
-            translate(center.x - 32f * k, center.y - 82f * k)
-        }) {
-            translate(1.2f * k, 2.4f * k) { drawPath(body, Color.Black.copy(alpha = 0.35f)) }
-            drawPath(body, Brush.radialGradient(0f to gloss, 1f to dark, center = Offset(22f * k, 112f * k), radius = 42f * k))
-            drawPath(smooth(GuitarGuard, k), guard)
-            drawPath(smooth(GuitarHead, k), wood)
-            drawRect(board, topLeft = Offset(29.6f * k, 28f * k), size = Size(5.8f * k, 78f * k))
-            for (i in 1..14) {
-                val f = (1f - Math.pow(0.88, i.toDouble()).toFloat()) / (1f - Math.pow(0.88, 15.0).toFloat()) * 0.95f
-                val y = (28f + 78f * f) * k
-                drawLine(metal.copy(alpha = 0.8f), Offset(29.6f * k, y), Offset(35.4f * k, y), strokeWidth = 0.35f * k)
-            }
-            listOf(6f, 11f, 16f, 21f, 26f, 31f).forEach { drawCircle(metal, 1.3f * k, Offset(27.7f * k, it * k)) }
-            listOf(Triple(26f, 111f, 38f), Triple(26f, 120f, 38f), Triple(25.5f, 130f, 38.5f)).forEach { (x0, y0, x1) ->
-                drawRoundRect(Color(0xFF232120), Offset(x0 * k, y0 * k), Size((x1 - x0) * k, 4.2f * k), CornerRadius(1.6f * k))
-                repeat(6) { j ->
-                    val px = x0 + 1.6f + j * (x1 - x0 - 3.2f) / 5f
-                    drawCircle(metal, 0.45f * k, Offset(px * k, (y0 + 2.1f) * k))
+private fun rememberIconArt(): IconArt? {
+    val res = LocalContext.current.resources
+    return remember(res) {
+        runCatching {
+            val full = BitmapFactory.decodeResource(res, R.mipmap.ic_launcher_foreground) ?: return@runCatching null
+            val w = full.width
+            val h = full.height
+            val px = IntArray(w * h)
+            full.getPixels(px, 0, w, 0, 0, w, h)
+            var left = w; var top = h; var right = -1; var bottom = -1; var brightest = 1
+            for (y in 0 until h) for (x in 0 until w) {
+                val c = px[y * w + x]
+                if ((c ushr 24) > 8) {
+                    if (x < left) left = x
+                    if (x > right) right = x
+                    if (y < top) top = y
+                    if (y > bottom) bottom = y
+                    brightest = maxOf(brightest, (c shr 8) and 0xFF)
                 }
             }
-            drawRoundRect(metal, Offset(24f * k, 141f * k), Size(16f * k, 4f * k), CornerRadius(0.8f * k))
-            listOf(Offset(41f, 133f), Offset(44f, 139f), Offset(42f, 145f)).forEach { drawCircle(metal, 2.3f * k, it * k) }
-            drawOval(metal, Offset(47.8f * k, 150.4f * k), Size(4.4f * k, 3.2f * k))
-            repeat(6) { j ->
-                val x = (30.6f + j * 0.95f) * k
-                drawLine(Color.White.copy(alpha = 0.55f), Offset(x, 8f * k), Offset(x, 143f * k), strokeWidth = 0.2f * k)
-            }
-        }
+            if (right < 0) return@runCatching null
+            IconArt(Bitmap.createBitmap(full, left, top, right - left + 1, bottom - top + 1).asImageBitmap(), brightest)
+        }.getOrNull()
     }
+}
+
+/**
+ * Recolours the icon art without touching its drawing: his light and shade (the icon's green
+ * channel) carry over to [color], so the dark lines stay dark and the outline stays the same.
+ */
+private fun recolour(color: Color, brightest: Int): ColorFilter {
+    val k = 255f / brightest
+    return ColorFilter.colorMatrix(
+        ColorMatrix(
+            floatArrayOf(
+                0f, color.red * k, 0f, 0f, 0f,
+                0f, color.green * k, 0f, 0f, 0f,
+                0f, color.blue * k, 0f, 0f, 0f,
+                0f, 0f, 0f, 1f, 0f,
+            ),
+        ),
+    )
+}
+
+/** The jump button's figure: the app icon's art as it is, in the colour picked in Settings. */
+@Composable
+fun IconFigure(color: JumpColor, modifier: Modifier = Modifier) {
+    val art = rememberIconArt() ?: return
+    val filter = when (color) {
+        JumpColor.ORIGINAL -> null
+        JumpColor.WHITE -> recolour(Color.White, art.brightest)
+        JumpColor.THEME -> recolour(MaterialTheme.colorScheme.primary, art.brightest)
+    }
+    Image(art.bitmap, contentDescription = null, colorFilter = filter, contentScale = ContentScale.Fit, modifier = modifier)
 }
 
 /**
  * A slider at the side of a long list: drag it to glide through the list. Faint while you
  * scroll, solid accent while held. Depending on the setting it shows as soon as you scroll, or
- * only after two seconds of scrolling. Also offers the guitar that brings the playing track
- * back into view after a while of scrolling, when it's somewhere else in the list.
+ * only after two seconds of scrolling. Also offers the app icon's figure, who brings the playing
+ * track back into view after a while of scrolling, when it's somewhere else in the list.
  */
 @Composable
 fun BoxScope.ListScrollExtras(
@@ -197,10 +185,13 @@ fun BoxScope.ListScrollExtras(
     var lastStop by remember { mutableLongStateOf(0L) }
     var elapsed by remember { mutableLongStateOf(0L) }
     var dragging by remember { mutableStateOf(false) }
+    // True while the figure is taking you to the playing track: that scroll isn't yours, so it
+    // doesn't count as scrolling (no slider, and he doesn't come back).
+    var jumping by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
         snapshotFlow { state.isScrollInProgress }.collect { scrolling ->
             val now = System.currentTimeMillis()
-            if (scrolling && sessionStart == 0L) sessionStart = now
+            if (scrolling && sessionStart == 0L && !jumping) sessionStart = now
             if (!scrolling) lastStop = now
         }
     }
@@ -279,7 +270,7 @@ fun BoxScope.ListScrollExtras(
         }
     }
 
-    // --- The guitar: back to the playing track ---
+    // --- The app icon's figure: back to the playing track ---
     val playingVisible by remember(playingIndex) {
         derivedStateOf { state.layoutInfo.visibleItemsInfo.any { it.index == playingIndex } }
     }
@@ -287,7 +278,7 @@ fun BoxScope.ListScrollExtras(
     LaunchedEffect(elapsed, playingVisible, playingIndex) {
         if (playingIndex < 0 || playingVisible) {
             showGuitar = false
-        } else if (elapsed >= 2000) {
+        } else if (elapsed >= 2000 && !jumping) {
             showGuitar = true
         }
     }
@@ -298,22 +289,54 @@ fun BoxScope.ListScrollExtras(
             showGuitar = false
         }
     }
-    val guitarAlpha by animateFloatAsState(if (showGuitar) 1f else 0f, tween(250), label = "guitar")
-    if (guitarAlpha > 0f) {
+    val target by rememberUpdatedState(playingIndex)
+    val goToPlaying: () -> Unit = {
+        // Only the first tap counts. He's gone at once, and any more taps while he fades land on
+        // him and do nothing, rather than on the row underneath.
+        if (showGuitar && !jumping) {
+            showGuitar = false
+            jumping = true
+            sessionStart = 0L
+            elapsed = 0L
+            scope.launch {
+                try {
+                    // Where the playing track is right now, not when he appeared.
+                    val to = target
+                    if (to >= 0) {
+                        val from = state.firstVisibleItemIndex
+                        if (kotlin.math.abs(to - from) > 24) {
+                            state.scrollToItem((if (to > from) to - 12 else to + 12).coerceAtLeast(0))
+                        }
+                        state.animateScrollToItem(to, -with(density) { 120.dp.roundToPx() })
+                    }
+                } finally {
+                    delay(400)
+                    jumping = false
+                }
+            }
+        }
+    }
+    val figureAlpha by animateFloatAsState(if (showGuitar) 1f else 0f, tween(if (showGuitar) 250 else 150), label = "figure")
+    if (figureAlpha > 0f || jumping) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 14.dp, bottom = bottomInset + 10.dp)
-                .size(60.dp)
-                .alpha(guitarAlpha)
-                .clickable(remember { MutableInteractionSource() }, indication = null) {
-                    showGuitar = false
-                    scope.launch { state.animateScrollToItem(playingIndex, -with(density) { 120.dp.roundToPx() }) }
+                .padding(end = 10.dp, bottom = bottomInset + 6.dp)
+                .size(66.dp)
+                // A round hit area around him; nothing of it is drawn.
+                .pointerInput(Unit) {
+                    detectTapGestures { pos ->
+                        val r = size.width / 2f
+                        if ((pos - Offset(r, size.height / 2f)).getDistance() <= r) goToPlaying()
+                    }
                 }
-                .semantics { contentDescription = "Go to the playing track" },
+                .semantics {
+                    contentDescription = "Go to the playing track"
+                    onClick { goToPlaying(); true }
+                },
         ) {
-            RockGuitar(accent, Modifier.size(52.dp))
+            IconFigure(LocalJumpColor.current, Modifier.alpha(figureAlpha).size(60.dp))
         }
     }
 }
