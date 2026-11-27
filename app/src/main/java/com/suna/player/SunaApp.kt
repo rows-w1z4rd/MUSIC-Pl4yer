@@ -1,5 +1,6 @@
 package com.suna.player
 
+import com.suna.player.data.HiddenStore
 import com.suna.player.ui.common.TrackArtKeyer
 import com.suna.player.ui.common.TrackArtFetcher
 import coil3.SingletonImageLoader
@@ -29,6 +30,7 @@ class SunaApp : Application(), SingletonImageLoader.Factory {
     val favorites by lazy { FavoritesStore(db) }
     val tagEditor by lazy { TagEditor(this) }
     val lyrics by lazy { LyricsRepository(this, settings) }
+    val hidden by lazy { HiddenStore(this) }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)

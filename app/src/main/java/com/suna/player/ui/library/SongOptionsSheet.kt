@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import androidx.compose.material.icons.rounded.VisibilityOff
 import com.suna.player.ui.common.TrackArt
 import androidx.compose.material.icons.rounded.Edit
 import android.app.SearchManager
@@ -90,6 +91,7 @@ fun SongOptionsSheet(
     onOpenArtist: () -> Unit,
     onShowDetails: () -> Unit,
     onEditInfo: () -> Unit,
+    onHide: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -151,6 +153,7 @@ fun SongOptionsSheet(
                 Divider()
                 Option(Icons.Rounded.Info, "Track details", then(onShowDetails))
                 Option(Icons.Rounded.Edit, "Edit track info", then(onEditInfo))
+                Option(Icons.Rounded.VisibilityOff, "Hide from library", then(onHide))
                 Divider()
                 Option(
                     Icons.Rounded.TravelExplore,

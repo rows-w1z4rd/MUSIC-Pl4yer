@@ -1,5 +1,12 @@
 package com.suna.player.ui.settings
 
+import androidx.compose.material3.OutlinedButton
+import com.suna.player.data.Song
+import com.suna.player.data.SliderMode
+import com.suna.player.data.ListStyle
+import androidx.compose.material.icons.rounded.LinearScale
+import androidx.compose.material.icons.rounded.ViewAgenda
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Lyrics
 import android.net.Uri
 import android.content.Intent
@@ -125,6 +132,9 @@ private enum class Page(val title: String) {
     WALLPAPER("Wallpaper"),
     HEADER("Header text"),
     TABS("Library tabs"),
+    HIDDEN("Hidden tracks"),
+    LIST_STYLE("List style"),
+    SLIDER("Scroll slider"),
 }
 
 @Composable
@@ -136,6 +146,8 @@ fun SettingsScreen(
     wallpapers: WallpaperStore,
     onBack: () -> Unit,
     onWallpaperPreview: (newPicture: Boolean) -> Unit,
+    hiddenSongs: List<Song>,
+    onUnhide: (Long) -> Unit,
 ) {
     var page by rememberSaveable { mutableStateOf(Page.MAIN) }
     val save = rememberSave(settings)
@@ -164,12 +176,31 @@ fun SettingsScreen(
                 onBack = if (shown == Page.MAIN) onBack else ({ page = Page.MAIN }),
             ) {
                 when (shown) {
-                    Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save) { page = it }
+                    Page.MAIN -> MainPage(appearance, skipSilence, wallpaper, settings, save, hiddenSongs.size) { page = it }
                     Page.THEME -> ThemePage(appearance, wallpaper != null, save)
                     Page.ACCENT -> AccentPage(appearance, save)
                     Page.WALLPAPER -> WallpaperPage(appearance, wallpaper, settings, wallpapers, onWallpaperPreview)
                     Page.HEADER -> HeaderPage(appearance, save)
                     Page.TABS -> TabsPage(appearance.tabs) { tabs -> save { setTabs(tabs) } }
+                    Page.HIDDEN -> HiddenPage(hiddenSongs, onUnhide)
+                    Page.LIST_STYLE -> {
+                        val style by settings.listStyle.collectAsStateWithLifecycle(initialValue = ListStyle.INSET)
+                        ChoicePage(
+                            options = ListStyle.entries.map { it.label },
+                            selected = style.ordinal,
+                            footer = "Inset keeps a gap at the sides, the way the app has always looked. " +
+                                "Full width reaches the edges of the screen, like Samsung Music.",
+                        ) { i -> save { setListStyle(ListStyle.entries[i]) } }
+                    }
+                    Page.SLIDER -> {
+                        val mode by settings.sliderMode.collectAsStateWithLifecycle(initialValue = SliderMode.SCROLLING)
+                        ChoicePage(
+                            options = SliderMode.entries.map { it.label },
+                            selected = mode.ordinal,
+                            footer = "The slider at the side of long lists: drag it to glide through them. " +
+                                "It can show as soon as you scroll, or only after you've been scrolling a while.",
+                        ) { i -> save { setSliderMode(SliderMode.entries[i]) } }
+                    }
                 }
             }
         }
@@ -382,6 +413,7 @@ private fun MainPage(
     wallpaper: ImageBitmap?,
     settings: SettingsStore,
     save: Save,
+    hiddenCount: Int,
     open: (Page) -> Unit,
 ) {
     val offload by settings.audioOffload.collectAsStateWithLifecycle(initialValue = false)
@@ -430,6 +462,8 @@ private fun MainPage(
         )
     }
 
+    val listStyle by settings.listStyle.collectAsStateWithLifecycle(initialValue = ListStyle.INSET)
+    val sliderMode by settings.sliderMode.collectAsStateWithLifecycle(initialValue = SliderMode.SCROLLING)
     Group("Library") {
         SettingRow(
             Icons.Rounded.Tab,
@@ -437,6 +471,18 @@ private fun MainPage(
             "Tabs",
             appearance.tabs.joinToString { it.label },
             onClick = { open(Page.TABS) },
+        )
+        RowDivider()
+        SettingRow(Icons.Rounded.VisibilityOff, Red, "Hidden tracks", hiddenCount.toString(), onClick = { open(Page.HIDDEN) })
+        RowDivider()
+        SettingRow(Icons.Rounded.ViewAgenda, Blue, "List style", listStyle.label, onClick = { open(Page.LIST_STYLE) })
+        RowDivider()
+        SettingRow(
+            Icons.Rounded.LinearScale,
+            Teal,
+            "Scroll slider",
+            if (sliderMode == SliderMode.SCROLLING) "While scrolling" else "After 5 s",
+            onClick = { open(Page.SLIDER) },
         )
     }
 
@@ -1001,3 +1047,64 @@ private fun TabsPage(enabled: List<LibraryTab>, onChange: (List<LibraryTab>) -> 
 /** "primary:Music/Lyrics" → "Music/Lyrics", for showing which folder was picked. */
 private fun folderName(tree: String): String =
     Uri.decode(tree).substringAfterLast(':').ifBlank { "Phone storage" }
+
+/** A short list of options; the chosen one has a check mark. */
+@Composable
+private fun ChoicePage(options: List<String>, selected: Int, footer: String, onPick: (Int) -> Unit) {
+    Group(footer = footer) {
+        options.forEachIndexed { i, label ->
+            if (i > 0) RowDivider(start = 14)
+            SettingRow(
+                null,
+                Color.Transparent,
+                label,
+                titleColor = if (i == selected) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                onClick = { onPick(i) },
+                trailing = {
+                    if (i == selected) {
+                        Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** Tracks hidden from the library, each with a button to bring it back. */
+@Composable
+private fun HiddenPage(songs: List<Song>, onUnhide: (Long) -> Unit) {
+    if (songs.isEmpty()) {
+        Group(footer = "Hide a track from its menu (⋮ or a long press). It stays on your phone and in your " +
+            "playlists, but leaves the library and never plays in shuffle or endless play.") {
+            SettingRow(null, Color.Transparent, "No hidden tracks")
+        }
+        return
+    }
+    Group(footer = "Hidden tracks stay on your phone and in your playlists, but leave the library, search " +
+        "and the smart lists, and never play in shuffle or endless play.") {
+        songs.forEachIndexed { i, song ->
+            if (i > 0) RowDivider(start = 76)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                com.suna.player.ui.common.Artwork(
+                    com.suna.player.ui.common.TrackArt(song.uri),
+                    Modifier.size(48.dp),
+                    corner = 10.dp,
+                )
+                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                    Text(song.title, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        song.artist,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                OutlinedButton(onClick = { onUnhide(song.id) }) { Text("Unhide") }
+            }
+        }
+    }
+}

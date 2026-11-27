@@ -18,6 +18,20 @@ import kotlinx.coroutines.flow.map
  * The theme: the background and overall look. Blue is the default; Black keeps unlit pixels
  * off on an OLED screen; From wallpaper takes its colors from the picture.
  */
+/** How the panel holding a list sits on screen. */
+enum class ListStyle(val label: String) {
+    /** A floating card with a gap at the sides, as the app has always looked. */
+    INSET("Inset"),
+    /** Reaching the screen's sides, only its top corners rounded, like Samsung Music. */
+    FULL("Full width"),
+}
+
+/** When the fast-scroll slider at the side of long lists shows up. */
+enum class SliderMode(val label: String) {
+    SCROLLING("While scrolling"),
+    AFTER_5S("After 5 seconds of scrolling"),
+}
+
 enum class Palette(val label: String) {
     BLUE("Blue"),
     BLACK("Black"),
@@ -207,6 +221,22 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { if (uri == null) it.remove(LYRICS_FOLDER) else it[LYRICS_FOLDER] = uri }
     }
 
+    val listStyle: Flow<ListStyle> = context.dataStore.data
+        .map { p -> ListStyle.entries.find { it.name == p[LIST_STYLE] } ?: ListStyle.INSET }
+        .distinctUntilChanged()
+
+    suspend fun setListStyle(style: ListStyle) {
+        context.dataStore.edit { it[LIST_STYLE] = style.name }
+    }
+
+    val sliderMode: Flow<SliderMode> = context.dataStore.data
+        .map { p -> SliderMode.entries.find { it.name == p[SLIDER_MODE] } ?: SliderMode.SCROLLING }
+        .distinctUntilChanged()
+
+    suspend fun setSliderMode(mode: SliderMode) {
+        context.dataStore.edit { it[SLIDER_MODE] = mode.name }
+    }
+
     val audioOffload: Flow<Boolean> =
         context.dataStore.data.map { it[AUDIO_OFFLOAD] ?: false }.distinctUntilChanged()
 
@@ -252,6 +282,8 @@ class SettingsStore(private val context: Context) {
         private val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
         private val AUDIO_OFFLOAD = booleanPreferencesKey("audio_offload")
         private val LYRICS_FOLDER = stringPreferencesKey("lyrics_folder")
+        private val LIST_STYLE = stringPreferencesKey("list_style")
+        private val SLIDER_MODE = stringPreferencesKey("slider_mode")
         private val ENDLESS_PLAY = booleanPreferencesKey("endless_play")
     }
 }

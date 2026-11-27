@@ -1,5 +1,11 @@
 package com.suna.player
 
+import com.suna.player.ui.common.NowPlaying
+import com.suna.player.ui.common.LocalSliderMode
+import com.suna.player.ui.common.LocalNowPlaying
+import com.suna.player.ui.common.LocalListStyle
+import com.suna.player.data.SliderMode
+import com.suna.player.data.ListStyle
 import com.suna.player.ui.library.EditTrackScreen
 import com.suna.player.ui.library.PlaylistSelectionTopBar
 import com.suna.player.ui.library.PlaylistSelectionBottomBar
@@ -197,7 +203,9 @@ private fun AppRoot(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap
 private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBitmap?) {
     val context = LocalContext.current
     val player = app.player
-    val songs by app.library.songs.collectAsStateWithLifecycle()
+    val allSongs by app.library.songs.collectAsStateWithLifecycle()
+    val hiddenIds by app.hidden.ids.collectAsStateWithLifecycle()
+    val songs = remember(allSongs, hiddenIds) { allSongs.filter { it.id !in hiddenIds } }
     val loaded by app.library.loaded.collectAsStateWithLifecycle()
     val playlists by app.playlists.playlists.collectAsStateWithLifecycle()
     val plays by app.stats.plays.collectAsStateWithLifecycle()
@@ -205,7 +213,15 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
     val favoriteSet = remember(favorites) { favorites.toHashSet() }
     val skipSilence by app.settings.skipSilence.collectAsStateWithLifecycle(initialValue = false)
     val playerState by player.state.collectAsStateWithLifecycle()
-    val songsById = remember(songs) { songs.associateBy { it.id } }
+    val playSource by player.source.collectAsStateWithLifecycle()
+    val listStyle by app.settings.listStyle.collectAsStateWithLifecycle(initialValue = ListStyle.INSET)
+    val sliderMode by app.settings.sliderMode.collectAsStateWithLifecycle(initialValue = SliderMode.SCROLLING)
+    // Every track, hidden ones too: playlists still show them.
+    val songsById = remember(allSongs) { allSongs.associateBy { it.id } }
+    val hideSong: (Song) -> Unit = { song ->
+        app.hidden.hide(listOf(song.id))
+        player.notify("\"${song.title}\" is hidden. Unhide it in Settings.")
+    }
 
     val nav = rememberNavController()
     val backStackEntry by nav.currentBackStackEntryAsState()
@@ -262,6 +278,13 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
             LocalMiniPlayerSpace provides if (showPlayer || picking) MiniPlayerSpace else 0.dp,
             LocalSongSelection provides selection,
             LocalSongLongPress provides onLongPress,
+            LocalNowPlaying provides NowPlaying(
+                songId = playerState.current?.mediaId?.toLongOrNull(),
+                playing = playerState.isPlaying,
+                source = playSource,
+            ),
+            LocalListStyle provides listStyle,
+            LocalSliderMode provides sliderMode,
         ) {
             // Pages slide side by side, never fading, and never overlap, so the wallpaper stays
             // still behind them.
@@ -404,8 +427,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                                 songs = shownSongs,
                                 cover = playlistCover(playlist, songsById),
                                 onBack = { nav.popBackStack() },
-                                onPlay = { player.play(shownSongs, it) },
-                                onShuffle = { player.shuffleAll(shownSongs) },
+                                onPlay = { player.play(shownSongs, it, "playlist:$id") },
+                                onShuffle = { player.shuffleAll(shownSongs, "playlist:$id") },
                                 onPlayNext = playNext,
                                 onSongOptions = { optionsFor = OptionsTarget(it, playlistId = id) },
                                 onToggleFavorite = { app.playlists.setFavorite(id, !playlist.favorite) },
@@ -513,8 +536,8 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                             title = list.label,
                             songs = listSongs,
                             onBack = { nav.popBackStack() },
-                            onPlay = { player.play(listSongs, it) },
-                            onShuffle = { player.shuffleAll(listSongs) },
+                            onPlay = { player.play(listSongs, it, "smart:${list.name}") },
+                            onShuffle = { player.shuffleAll(listSongs, "smart:${list.name}") },
                             onPlayNext = playNext,
                             onSongOptions = openSongOptions,
                         )
@@ -539,7 +562,9 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                             settings = app.settings,
                             wallpapers = app.wallpapers,
                             onBack = { nav.popBackStack() },
-                            onWallpaperPreview = { newPicture ->
+                            hiddenSongs = remember(allSongs, hiddenIds) { allSongs.filter { it.id in hiddenIds } },
+                        onUnhide = { app.hidden.unhide(it) },
+                        onWallpaperPreview = { newPicture ->
                                 nav.navigate(if (newPicture) Routes.WALLPAPER_NEW else Routes.WALLPAPER) {
                                     launchSingleTop = true
                                 }
@@ -620,6 +645,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 onShowDetails = { detailsFor = song },
                 onShare = { shareSongs(context, listOf(song)) },
                 onSelect = { selection.start(target.list, song) },
+                onHide = { hideSong(song) },
                 onDelete = { deleteSongs(listOf(song)) },
                 onDismiss = { pressed = null },
             )
@@ -644,7 +670,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
         PlaylistSelectionBottomBar(
             selection = playlistSelection,
             onPlay = { ids ->
-                player.play(songsOf(ids), 0)
+                player.play(songsOf(ids), 0, ids.singleOrNull()?.let { "playlist:$it" })
                 playlistSelection.clear()
             },
             onAdd = { ids -> addToPlaylist = songsOf(ids) },
@@ -701,6 +727,7 @@ private fun MainContent(app: SunaApp, appearance: Appearance, wallpaper: ImageBi
                 nav.navigate("artist/${song.artistId}")
             },
             onShowDetails = { detailsFor = song },
+            onHide = { hideSong(song) },
             onEditInfo = {
                 scope.launch { expansion.snapTo(0f) }
                 nav.navigate("edit/${song.id}")

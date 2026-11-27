@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import androidx.compose.material.icons.rounded.VisibilityOff
 import com.suna.player.ui.common.TrackArt
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -81,6 +82,7 @@ fun SongContextMenu(
     onShowDetails: () -> Unit,
     onShare: () -> Unit,
     onSelect: () -> Unit,
+    onHide: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -149,6 +151,8 @@ fun SongContextMenu(
                     Item("Track details", Icons.Rounded.Info) { close(onShowDetails) }
                     Line()
                     Item("Share", Icons.Rounded.Share) { close(onShare) }
+                    Line()
+                    Item("Hide from library", Icons.Rounded.VisibilityOff) { close(onHide) }
                     Gap()
                     Item("Select", Icons.Rounded.CheckCircleOutline) { close(onSelect) }
                     Gap()

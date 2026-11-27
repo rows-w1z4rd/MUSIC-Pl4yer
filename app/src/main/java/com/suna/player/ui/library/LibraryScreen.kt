@@ -1,5 +1,6 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.LocalNowPlaying
 import com.suna.player.ui.common.TrackArt
 import androidx.compose.runtime.SideEffect
 import androidx.compose.material.icons.rounded.Check
@@ -797,6 +798,7 @@ private fun PlaylistsPage(
         playlists.sortedWith(order)
     }
     SideEffect { selection.adopt(sorted.map { it.id }) }
+    val source = LocalNowPlaying.current.source
     val grey = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     // How each section looks, and whether it is folded away; remembered between launches.
     var smartView by remember { mutableStateOf(sectionView(uiPrefs.getString(SMART_VIEW, null), SectionView.SCROLL)) }
@@ -865,6 +867,7 @@ private fun PlaylistsPage(
                         cover = listSongs.firstOrNull()?.let { TrackArt(it.uri) },
                         // Dimmed and inactive while picking playlists, as in Samsung Music.
                         enabled = !selection.active,
+                        nowPlaying = source == "smart:${list.name}",
                         onClick = { onOpenSmart(list) },
                     )
                 },
@@ -907,6 +910,7 @@ private fun PlaylistsPage(
                         subtitle = songCount(playlist.songIds.size),
                         cover = playlistCover(playlist, songsById),
                         favorite = playlist.favorite,
+                        nowPlaying = source == "playlist:${playlist.id}",
                         selected = if (selection.active) playlist.id in selection.ids else null,
                         onClick = { if (selection.active) selection.toggle(playlist.id) else onOpen(playlist.id) },
                         onLongClick = { if (selection.active) selection.toggle(playlist.id) else selection.start(playlist.id) },

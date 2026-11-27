@@ -180,7 +180,8 @@ class PlaybackService : MediaSessionService() {
         if (!endless || !restoreDone) return false
         if (player.mediaItemCount == 0 || player.hasNextMediaItem()) return false
         if (player.repeatMode != Player.REPEAT_MODE_OFF || repeatsLeft > 0) return false
-        val library = app.library.songs.value
+        val hidden = app.hidden.ids.value
+        val library = app.library.songs.value.filter { it.id !in hidden }
         if (library.isEmpty()) return false
         val inQueue = HashSet<String>(player.mediaItemCount)
         for (i in 0 until player.mediaItemCount) inQueue += player.getMediaItemAt(i).mediaId

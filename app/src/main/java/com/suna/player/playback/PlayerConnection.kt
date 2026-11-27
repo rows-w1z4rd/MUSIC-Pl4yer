@@ -1,5 +1,6 @@
 package com.suna.player.playback
 
+import com.suna.player.SunaApp
 import com.suna.player.ui.common.TrackArt
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -139,9 +140,20 @@ class PlayerConnection(private val context: Context) {
      * like Samsung's: with shuffle on it starts on a random track, so every press brings a new
      * song, and with shuffle off it starts at the top; a short message says how many tracks.
      */
-    fun play(songs: List<Song>, startIndex: Int) {
+    /** Where the current queue was started from, such as "playlist:12", for the playing bars. */
+    private val _source = MutableStateFlow<String?>(null)
+    val source: StateFlow<String?> = _source.asStateFlow()
+
+    private val hiddenIds: Set<Long> get() = (context.applicationContext as SunaApp).hidden.ids.value
+
+    fun play(all: List<Song>, startIndex: Int, source: String? = null) {
         val c = controller ?: return
+        // Hidden tracks never play from a list; only the very track tapped is kept.
+        val tapped = all.getOrNull(startIndex)
+        val songs = all.filter { it.id !in hiddenIds || it == tapped }
+        val startIndex = if (tapped != null) songs.indexOf(tapped) else startIndex
         if (songs.isEmpty()) return
+        _source.value = source
         val start = when {
             startIndex != PLAY_ALL -> startIndex.coerceIn(0, songs.lastIndex)
             c.shuffleModeEnabled -> songs.indices.random()
@@ -158,7 +170,10 @@ class PlayerConnection(private val context: Context) {
         }
     }
 
-    fun shuffleAll(songs: List<Song>) = play(songs.shuffled(), 0)
+    fun shuffleAll(songs: List<Song>, source: String? = null) {
+        val playable = songs.filter { it.id !in hiddenIds }
+        if (playable.isNotEmpty()) play(playable.shuffled(), 0, source)
+    }
 
     // --- Queue ---
 

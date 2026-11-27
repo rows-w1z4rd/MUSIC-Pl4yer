@@ -1,5 +1,7 @@
 package com.suna.player.ui.library
 
+import com.suna.player.ui.common.PlayingBars
+import com.suna.player.ui.common.LocalNowPlaying
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -67,6 +69,8 @@ class PlaylistTile(
     val selected: Boolean? = null,
     /** False dims it and ignores taps (smart lists while picking playlists). */
     val enabled: Boolean = true,
+    /** Its music is what's playing now. */
+    val nowPlaying: Boolean = false,
     val onClick: () -> Unit,
     val onLongClick: () -> Unit = {},
 )
@@ -177,10 +181,14 @@ private fun TileRow(tile: PlaylistTile) {
         Text(
             tile.title,
             fontSize = 18.sp,
+            color = if (tile.nowPlaying) colors.primary else Color.Unspecified,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(start = 18.dp, end = 8.dp),
         )
+        if (tile.nowPlaying) {
+            PlayingBars(LocalNowPlaying.current.playing, colors.primary, Modifier.padding(end = 12.dp))
+        }
         if (tile.favorite) {
             Icon(Icons.Rounded.Favorite, contentDescription = "Favorite", tint = colors.primary, modifier = Modifier.padding(end = 10.dp).size(18.dp))
         }
@@ -217,12 +225,18 @@ private fun TileCard(tile: PlaylistTile, modifier: Modifier) {
         Text(
             tile.title,
             fontSize = 16.sp,
+            color = if (tile.nowPlaying) colors.primary else Color.Unspecified,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 10.dp),
         )
-        Text(tile.subtitle, style = SmallLabel, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)) {
+            if (tile.nowPlaying) {
+                PlayingBars(LocalNowPlaying.current.playing, colors.primary, Modifier.padding(end = 6.dp).size(14.dp))
+            }
+            Text(tile.subtitle, style = SmallLabel, color = if (tile.nowPlaying) colors.primary else colors.onSurfaceVariant)
+        }
     }
 }
 

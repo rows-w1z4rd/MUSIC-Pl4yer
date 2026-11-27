@@ -1,5 +1,6 @@
 package com.suna.player.ui.common
 
+import com.suna.player.data.ListStyle
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
@@ -101,17 +102,25 @@ fun borderColor(): Color {
     return if (LocalIsLight.current) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.10f)
 }
 
-/** A floating panel with a thin outline, separated from the screen edges by a small gap. */
+/**
+ * The panel a list sits on: a floating card with a thin outline and a small gap at the sides,
+ * or (List style: Full width) reaching the screen's sides with only its top corners rounded.
+ */
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(
-        modifier
-            .padding(horizontal = 8.dp)
-            .fillMaxWidth()
-            .clip(PanelShape)
-            .background(cardColor())
-            .border(1.dp, borderColor(), PanelShape),
-    ) { content() }
+    if (LocalListStyle.current == ListStyle.FULL) {
+        val shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
+        Box(modifier.fillMaxWidth().clip(shape).background(cardColor())) { content() }
+    } else {
+        Box(
+            modifier
+                .padding(horizontal = 8.dp)
+                .fillMaxWidth()
+                .clip(PanelShape)
+                .background(cardColor())
+                .border(1.dp, borderColor(), PanelShape),
+        ) { content() }
+    }
 }
 
 /** Clickable that shrinks slightly while pressed, settling without any bounce. */
@@ -211,6 +220,8 @@ fun SongRow(
 ) {
     val colors = MaterialTheme.colorScheme
     val bounds = remember { arrayOf(Rect.Zero) }
+    val now = LocalNowPlaying.current
+    val isPlaying = now.songId == song.id
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -233,13 +244,14 @@ fun SongRow(
             Text(
                 song.title,
                 style = MaterialTheme.typography.bodyLarge,
+                color = if (isPlaying) colors.primary else Color.Unspecified,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 song.artist,
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
+                color = if (isPlaying) colors.primary.copy(alpha = 0.8f) else colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -252,7 +264,19 @@ fun SongRow(
                 modifier = Modifier.padding(end = if (selected != null) 12.dp else 0.dp),
             )
         }
-        if (selected == null) {
+        if (selected == null && isPlaying) {
+            // Where "play next" usually is: the dots that move with the music, like Samsung Music.
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                PlayingBars(now.playing, colors.primary)
+            }
+            HintIconButton("More options", onClick = onOptions) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = "Options for ${song.title}",
+                    tint = colors.onSurfaceVariant,
+                )
+            }
+        } else if (selected == null) {
             HintIconButton("Play next", onClick = onPlayNext) {
                 Icon(
                     Icons.AutoMirrored.Rounded.PlaylistAdd,
@@ -301,7 +325,13 @@ fun SongList(
     var dragged by remember { mutableStateOf<Long?>(null) }
     var dragY by remember { mutableFloatStateOf(0f) }
 
-    LazyColumn(state = state, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
+    val playingId = LocalNowPlaying.current.songId
+    val playingIndex = remember(songs, playingId, header != null) {
+        val i = songs.indexOfFirst { it.id == playingId }
+        if (i < 0) -1 else i + if (header != null) 1 else 0
+    }
+    Box(modifier.fillMaxSize()) {
+    LazyColumn(state = state, modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (header != null) item(key = "header") { header() }
         itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
             var rowHeight by remember { mutableIntStateOf(1) }
@@ -361,6 +391,8 @@ fun SongList(
                     .then(if (lifted) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
             )
         }
+    }
+    ListScrollExtras(state, contentPadding.calculateBottomPadding(), playingIndex)
     }
 }
 
