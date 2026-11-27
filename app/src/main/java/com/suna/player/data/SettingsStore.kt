@@ -29,7 +29,7 @@ enum class ListStyle(val label: String) {
 /** When the fast-scroll slider at the side of long lists shows up. */
 enum class SliderMode(val label: String) {
     SCROLLING("While scrolling"),
-    AFTER_5S("After 5 seconds of scrolling"),
+    AFTER_5S("After 2 seconds of scrolling"),
 }
 
 enum class Palette(val label: String) {

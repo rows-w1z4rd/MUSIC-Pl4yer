@@ -177,7 +177,10 @@ private fun TileRow(tile: PlaylistTile) {
         if (tile.selected != null) {
             PickMark(tile.selected, Modifier.padding(end = 14.dp))
         }
-        Artwork(tile.cover, Modifier.size(58.dp), corner = 16.dp)
+        Box(Modifier.size(58.dp)) {
+            Artwork(tile.cover, Modifier.size(58.dp), corner = 16.dp)
+            if (tile.nowPlaying) CoverBars(Modifier.size(58.dp), corner = 16.dp, barSize = 16.dp)
+        }
         Text(
             tile.title,
             fontSize = 18.sp,
@@ -186,9 +189,7 @@ private fun TileRow(tile: PlaylistTile) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(start = 18.dp, end = 8.dp),
         )
-        if (tile.nowPlaying) {
-            PlayingBars(LocalNowPlaying.current.playing, colors.primary, Modifier.padding(end = 12.dp))
-        }
+
         if (tile.favorite) {
             Icon(Icons.Rounded.Favorite, contentDescription = "Favorite", tint = colors.primary, modifier = Modifier.padding(end = 10.dp).size(18.dp))
         }
@@ -210,6 +211,7 @@ private fun TileCard(tile: PlaylistTile, modifier: Modifier) {
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
             Artwork(tile.cover, Modifier.fillMaxWidth().aspectRatio(1f), corner = 26.dp)
+            if (tile.nowPlaying) CoverBars(Modifier.fillMaxWidth().aspectRatio(1f), corner = 26.dp, barSize = 26.dp)
             if (tile.selected != null) {
                 PickMark(tile.selected, Modifier.align(Alignment.TopStart).padding(10.dp), onPicture = true)
             }
@@ -231,12 +233,12 @@ private fun TileCard(tile: PlaylistTile, modifier: Modifier) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 10.dp),
         )
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)) {
-            if (tile.nowPlaying) {
-                PlayingBars(LocalNowPlaying.current.playing, colors.primary, Modifier.padding(end = 6.dp).size(14.dp))
-            }
-            Text(tile.subtitle, style = SmallLabel, color = if (tile.nowPlaying) colors.primary else colors.onSurfaceVariant)
-        }
+        Text(
+            tile.subtitle,
+            style = SmallLabel,
+            color = if (tile.nowPlaying) colors.primary else colors.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+        )
     }
 }
 
@@ -251,4 +253,28 @@ private fun PickMark(selected: Boolean, modifier: Modifier, onPicture: Boolean =
             .size(26.dp)
             .then(if (onPicture) Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape) else Modifier),
     )
+}
+
+/**
+ * The playing mark on a playlist's cover: the moving dots in its lower corner, over a soft shade
+ * that fades in from the bottom, so the picture stays visible.
+ */
+@Composable
+private fun CoverBars(modifier: Modifier, corner: androidx.compose.ui.unit.Dp, barSize: androidx.compose.ui.unit.Dp) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(corner))
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0.45f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = 0.55f),
+                ),
+            ),
+    ) {
+        PlayingBars(
+            LocalNowPlaying.current.playing,
+            MaterialTheme.colorScheme.primary,
+            Modifier.align(Alignment.BottomStart).padding(start = barSize * 0.45f, bottom = barSize * 0.45f).size(barSize),
+        )
+    }
 }

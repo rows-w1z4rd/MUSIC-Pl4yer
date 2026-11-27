@@ -481,7 +481,7 @@ private fun MainPage(
             Icons.Rounded.LinearScale,
             Teal,
             "Scroll slider",
-            if (sliderMode == SliderMode.SCROLLING) "While scrolling" else "After 5 s",
+            if (sliderMode == SliderMode.SCROLLING) "While scrolling" else "After 2 s",
             onClick = { open(Page.SLIDER) },
         )
     }
